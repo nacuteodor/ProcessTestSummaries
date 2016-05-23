@@ -155,6 +155,8 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
     let messageJsonPath: [SubscriptType] = ["Message"]
     let startTimeIntervalJsonPath: [SubscriptType] = ["StartTimeInterval"]
     let finishTimeIntervalJsonPath: [SubscriptType] = ["FinishTimeInterval"]
+    let fileNameJsonPath: [SubscriptType] = ["FileName"]
+    let lineNumberJsonPath: [SubscriptType] = ["LineNumber"]
 
     let testableSummariesJsons = summariesPlistJson[testableSummariesJsonPath].arrayValue
     var totalTestsCount = 0
@@ -186,10 +188,10 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
                     if failureSummariesJson.arrayValue.count > 0 {
                         let firstFailureSummaryJson = failureSummariesJson[0]
                         failureMessage = firstFailureSummaryJson[messageJsonPath].stringValue
-                        var fileName = firstFailureSummaryJson["FileName"].stringValue
+                        var fileName = firstFailureSummaryJson[fileNameJsonPath].stringValue
                         let rangeToRemove = fileName.rangeOfString(targetName + "/")
                         fileName.replaceRange(fileName.startIndex..<(rangeToRemove?.startIndex ?? fileName.startIndex), with: "")
-                        let lineNumber = firstFailureSummaryJson["LineNumber"].intValue
+                        let lineNumber = firstFailureSummaryJson[lineNumberJsonPath].intValue
                         failureStackTrace = fileName + ":" + String(lineNumber)
                     }
                     outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath))
@@ -228,17 +230,16 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
     let testSuitesFailuresAttr = NSXMLNode.attributeWithName("failures", stringValue: String(totalFailuresCount)) as! NSXMLNode
     testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr]
 
-    //    let xmlString = jUnitXml.XMLStringWithOptions(Int(NSXMLNodePrettyPrint))
-    //    print(xmlString)
+    // create the needed path for saving the report
     var pathTokens = jUnitRepPath.componentsSeparatedByString("/")
     let reportFileName = pathTokens.count > 0 ? pathTokens.removeLast() : ""
     if reportFileName.isEmpty {
         try! CustomErrorType.InvalidArgument(error: "\(jUnitRepPath) JUnit report path has an empty filename.").throwsError()
     }
-    // create the needed path for saving the report
     let jUnitRepParentDir = jUnitRepPath.stringByReplacingOccurrencesOfString("/" + reportFileName, withString: "")
     createFolderOrEmptyIfExistsAtPath(jUnitRepParentDir, emptyPath: false)
 
+    // finally, save the xml report
     let xmlData = jUnitXml.XMLDataWithOptions(Int(NSXMLNodePrettyPrint))
     if !xmlData.writeToFile(jUnitRepPath, atomically: false) {
         try! CustomErrorType.InvalidArgument(error: "Writing xml data to file \(jUnitRepPath) failed!").throwsError()
