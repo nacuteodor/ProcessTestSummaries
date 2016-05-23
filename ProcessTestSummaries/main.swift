@@ -176,9 +176,10 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
                 let testCaseStatus =  testCaseJson[testStatusJsonPath].stringValue
 
                 var time = "0"
-                var outputLogs = [String]()
+                let activitySummariesJson = testCaseJson[activitySummariesJsonPath]
                 if testCaseStatus != "Success" {
                     failuresCount += 1
+                    var outputLogs = [String]()
                     var failureStackTrace = ""
                     var failureMessage = ""
                     let failureSummariesJson = testCaseJson[failureSummariesJsonPath]
@@ -191,6 +192,7 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
                         let lineNumber = firstFailureSummaryJson["LineNumber"].intValue
                         failureStackTrace = fileName + ":" + String(lineNumber)
                     }
+                    outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath))
 
                     let failureNode = NSXMLElement(name: "failure", stringValue: failureStackTrace)
                     let messageAttr = NSXMLNode.attributeWithName("message", stringValue: failureMessage)  as! NSXMLNode
@@ -199,14 +201,11 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
                     testCaseNode.addChild(failureNode)
                     testCaseNode.addChild(systemOutNode)
                 }
-                let activitySummariesJson = testCaseJson[activitySummariesJsonPath]
-                outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath))
                 if activitySummariesJson.arrayValue.count > 0 {
                     let startTime = Double(activitySummariesJson.arrayValue[0][startTimeIntervalJsonPath].stringValue) ?? 0.0
                     let endTime = Double(activitySummariesJson.arrayValue[activitySummariesJson.count - 1][finishTimeIntervalJsonPath].stringValue) ?? 0.0
                     time = String(format: "%.3f", endTime - startTime)
                 }
-
 
                 let classnameAttr = NSXMLNode.attributeWithName("classname", stringValue: testSuiteName)  as! NSXMLNode
                 let nameAttr = NSXMLNode.attributeWithName("name", stringValue: testCaseName) as! NSXMLNode
