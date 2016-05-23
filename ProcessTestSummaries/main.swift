@@ -175,7 +175,7 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
                 let testCaseName = testCaseJson[testNameJsonPath].stringValue.stringByReplacingOccurrencesOfString("()", withString: "")
                 let testCaseStatus =  testCaseJson[testStatusJsonPath].stringValue
 
-                var time = ""
+                var time = "0"
                 var outputLogs = [String]()
                 if testCaseStatus != "Success" {
                     failuresCount += 1
@@ -191,13 +191,6 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
                         let lineNumber = firstFailureSummaryJson["LineNumber"].intValue
                         failureStackTrace = fileName + ":" + String(lineNumber)
                     }
-                    let activitySummariesJson = testCaseJson[activitySummariesJsonPath]
-                    outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath))
-                    if activitySummariesJson.arrayValue.count > 0 {
-                        let startTime = Double(activitySummariesJson.arrayValue[0][startTimeIntervalJsonPath].stringValue) ?? 0.0
-                        let endTime = Double(activitySummariesJson.arrayValue[activitySummariesJson.count - 1][finishTimeIntervalJsonPath].stringValue) ?? 0.0
-                        time = String(format: "%.3f", endTime - startTime)
-                    }
 
                     let failureNode = NSXMLElement(name: "failure", stringValue: failureStackTrace)
                     let messageAttr = NSXMLNode.attributeWithName("message", stringValue: failureMessage)  as! NSXMLNode
@@ -205,6 +198,13 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
                     let systemOutNode = NSXMLElement(name: "system-out", stringValue: outputLogs.joinWithSeparator("\n"))
                     testCaseNode.addChild(failureNode)
                     testCaseNode.addChild(systemOutNode)
+                }
+                let activitySummariesJson = testCaseJson[activitySummariesJsonPath]
+                outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath))
+                if activitySummariesJson.arrayValue.count > 0 {
+                    let startTime = Double(activitySummariesJson.arrayValue[0][startTimeIntervalJsonPath].stringValue) ?? 0.0
+                    let endTime = Double(activitySummariesJson.arrayValue[activitySummariesJson.count - 1][finishTimeIntervalJsonPath].stringValue) ?? 0.0
+                    time = String(format: "%.3f", endTime - startTime)
                 }
 
 
