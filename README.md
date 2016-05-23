@@ -4,3 +4,6 @@ This tool is an OS X console application which processes the TestSummaries plist
 
 ## Usage e.g:
 ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPath /$REPORTS_PATH/reports/unitTestResult.xml --screenshotsPath $LAST_SCREENSHOTS_PATH --screenshotsCount 10
+
+## Swift supported version:
+Xcode 7.3
