@@ -7,3 +7,5 @@ ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPa
 
 ## Swift supported version:
 Xcode 7.3
+
+## Please, give a star to this project if it helps you.
