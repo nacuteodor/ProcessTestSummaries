@@ -33,11 +33,11 @@ extension JSON {
         let fromStart = relativePath.startsWith(starterSequence) { (element, starter) -> Bool in
             return element == starter
         }
-        if relativePath.count == 0 {
-            return true
-        }
         if fromStart {
             relativePath.removeFirst()
+        }
+        if relativePath.count == 0 {
+            return true
         }
         if absolutePath.count < relativePath.count {
             return false
