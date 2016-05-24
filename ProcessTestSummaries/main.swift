@@ -268,7 +268,7 @@ print("Parsed options: \(parsedOptions)")
 let logsTestPathOptionValue = parsedOptions[logsTestPathOption]
 let jUnitReportPathOptionValue = parsedOptions[jUnitReportPathOption]
 let screenshotsPathOptionValue = parsedOptions[screenshotsPathOption]
-let screenshotsCountOptionValue = parsedOptions[screenshotsPathOption]
+let screenshotsCountOptionValue = parsedOptions[screenshotsCountOption]
 
 // ====== options validations ======
 argumentOptionsParser.validateOptionExistsAndIsNotEmpty(optionName: logsTestPathOption, optionValue: logsTestPathOptionValue)
@@ -280,7 +280,7 @@ if jUnitReportPathOptionValue == nil && screenshotsPathOptionValue == nil {
 
 var screenshotsCount = 5 // the default screenshots count value
 if let screenshotsCountOptionValue = screenshotsCountOptionValue {
-    argumentOptionsParser.validateOptionIsNotEmpty(optionName: logsTestPathOption, optionValue: screenshotsCountOptionValue)
+    argumentOptionsParser.validateOptionIsNotEmpty(optionName: screenshotsCountOption, optionValue: screenshotsCountOptionValue)
     screenshotsCount = Int(screenshotsCountOptionValue) ?? screenshotsCount
 }
 
@@ -295,5 +295,5 @@ if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
 if let screenshotsPathOptionValue = screenshotsPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: screenshotsPathOption, optionValue: screenshotsPathOptionValue)
     
-    saveLastScreenshots(logsTestPath: logsTestPathOptionValue!, lastScreenshotsPath: screenshotsPathOption, screenshotsCount: screenshotsCount)
+    saveLastScreenshots(logsTestPath: logsTestPathOptionValue!, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount)
 }
