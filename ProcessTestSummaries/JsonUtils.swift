@@ -33,9 +33,6 @@ extension JSON {
         let fromStart = relativePath.startsWith(starterSequence) { (element, starter) -> Bool in
             return element == starter
         }
-        if fromStart {
-            relativePath.removeFirst()
-        }
         if relativePath.count == 0 {
             return true
         }
