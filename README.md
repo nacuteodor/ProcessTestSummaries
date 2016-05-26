@@ -9,7 +9,7 @@ This tool is an OS X console application which processes the TestSummaries plist
 - the last screenshots are saved for each test in a separate folder and in the order they were created in test
 
 ## Usage e.g:
-ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPath /$REPORTS_PATH/unitTestResult.xml --screenshotsPath $LAST_SCREENSHOTS_PATH --screenshotsCount 10
+ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPath $REPORTS_PATH/unitTestResult.xml --screenshotsPath $LAST_SCREENSHOTS_PATH --screenshotsCount 10
 
 ## Swift supported version:
 Xcode 7.3
