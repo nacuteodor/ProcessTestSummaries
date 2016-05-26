@@ -144,7 +144,7 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
     let jUnitXml = NSXMLDocument(rootElement: testSuitesNode)
 
     let testableSummariesJsonPath: [SubscriptType] = ["TestableSummaries"]
-    let testSuitesJsonPath: [SubscriptType] = ["Tests", 0, "Subtests", 0, "Subtests"]
+    let testSuitesJsonPath: [SubscriptType] = ["^", "Tests", ".", "Subtests", ".", "Subtests", "."]
     let subtestsJsonPath: [SubscriptType] = ["Subtests"]
     let targetNameJsonPath: [SubscriptType] = ["TargetName"]
     let testNameJsonPath: [SubscriptType] = ["TestName"]
@@ -163,7 +163,7 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
     var totalFailuresCount = 0
     for testableSummaryJson in testableSummariesJsons {
         let targetName = testableSummaryJson[targetNameJsonPath].stringValue
-        let testSuitesJsons = testableSummaryJson[testSuitesJsonPath].arrayValue
+        let testSuitesJsons = testableSummaryJson.values(relativePath: testSuitesJsonPath)
 
         for testSuitesJson in testSuitesJsons {
             let testSuiteNode = NSXMLElement(name: "testsuite")

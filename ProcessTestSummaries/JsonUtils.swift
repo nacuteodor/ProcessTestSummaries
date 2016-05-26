@@ -68,7 +68,7 @@ extension JSON {
                 }
             }
 
-            if fromStart && fieldIndex == 0  && currentMatchedFieldIndex == 0 && currentFieldFromRelativePath != "*" {
+            if fromStart && fieldIndex == 0  && currentMatchedFieldIndex == 0 && currentFieldFromRelativePath != kDescendantsWildcard {
                 matches = false
                 break
             }
@@ -99,6 +99,15 @@ extension JSON {
         }
         if matchesRelativePath(relativePath, absolutePath: currentPath) {
             absolutePaths.append(currentPath)
+        }
+        let starterSequence: [SubscriptType] = [kStarterWildcard]
+        let fromStart = relativePath.startsWith(starterSequence) { (element, starter) -> Bool in
+            return element == starter
+        }
+        if fromStart && relativePath.count == currentPath.count + 1 && !relativePath.contains({ (field) -> Bool in
+            return field == kDescendantsWildcard
+        }) {
+            return absolutePaths
         }
         switch json.type {
         case .Dictionary:
