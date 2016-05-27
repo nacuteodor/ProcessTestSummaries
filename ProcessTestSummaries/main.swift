@@ -205,7 +205,14 @@ func generateJUnitReport(logsTestPath logsTestPath: String, jUnitRepPath: String
                 }
                 if activitySummariesJson.arrayValue.count > 0 {
                     let startTime = Double(activitySummariesJson.arrayValue[0][startTimeIntervalJsonPath].stringValue) ?? 0.0
-                    let endTime = Double(activitySummariesJson.arrayValue[activitySummariesJson.count - 1][finishTimeIntervalJsonPath].stringValue) ?? 0.0
+                    let lastActivitySummaryJson = activitySummariesJson.arrayValue[activitySummariesJson.count - 1]
+                    var finishTimeIntervalJsons = lastActivitySummaryJson.values(relativePath: finishTimeIntervalJsonPath)
+                    var finishTimeIntervalJson = finishTimeIntervalJsons.count > 0 ? finishTimeIntervalJsons[finishTimeIntervalJsons.count - 1] : JSON.nullJSON
+                    if finishTimeIntervalJsons.count == 0 {
+                         finishTimeIntervalJsons = lastActivitySummaryJson.values(relativePath: startTimeIntervalJsonPath)
+                        finishTimeIntervalJson = finishTimeIntervalJsons.count > 0 ? finishTimeIntervalJsons[finishTimeIntervalJsons.count - 1] : JSON.nullJSON
+                    }
+                    let endTime = Double(finishTimeIntervalJson.stringValue) ?? 0.0
                     time = String(format: "%.3f", endTime - startTime)
                 }
 
