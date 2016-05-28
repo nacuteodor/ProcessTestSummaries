@@ -10,7 +10,7 @@ This tool is an OS X console application which processes the TestSummaries plist
 - the generated files can be easily added as artifacts in Jenkins for the tests job
 
 ## Usage e.g:
-xcodebuild -derivedDataPath $DERIVED_DATA_PATH 
+xcodebuild -derivedDataPath $DERIVED_DATA_PATH test
 
 ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPath $REPORTS_PATH/unitTestResult.xml --screenshotsPath $LAST_SCREENSHOTS_PATH --screenshotsCount 10
 
