@@ -18,3 +18,6 @@ ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPa
 Xcode 7.3
 
 ## Please, give a star to this project if it helps you.
+
+## Contact
+[Profile](http://nacuteodor.wix.com/profile)
