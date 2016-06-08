@@ -60,7 +60,8 @@ func createFolderOrEmptyIfExistsAtPath(path: String, emptyPath: Bool = true) -> 
 
 /// Save the last @screenshotsCount screenshots to @lastScreenshotsPath folder from @logsTestPath test logs for failed tests
 /// if screenshotsCount is -1 then save all screenshots available
-func saveLastScreenshots(logsTestPath logsTestPath: String, lastScreenshotsPath: String, screenshotsCount: Int) {
+/// - parameter excludeIdenticalScreenshots: excludes the consecutive identical screenshots, to get the relevant screenshots
+func saveLastScreenshots(logsTestPath logsTestPath: String, lastScreenshotsPath: String, screenshotsCount: Int, excludeIdenticalScreenshots: Bool = false) {
     print("Save last \(screenshotsCount) screenshots from \(logsTestPath) logs test folder to \(lastScreenshotsPath) folder")
     if logsTestPath.isEmpty {
         try! CustomErrorType.InvalidArgument(error: "Tests logs path is empty.").throwsError()
@@ -88,13 +89,31 @@ func saveLastScreenshots(logsTestPath logsTestPath: String, lastScreenshotsPath:
         var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasScreenshotData"], withValue: JSON(true))
         // if screenshotsCount param is -1 then save all screenshots
         let screenshotsCount = screenshotsCount == -1 ? screenshotNodes.count : screenshotsCount
-        screenshotNodes.removeFirst(screenshotNodes.count >= screenshotsCount ? screenshotNodes.count - screenshotsCount : 0)
-        var screenshotsFiles = screenshotNodes.map { (node) -> String in
-            return "Screenshot_" + node["UUID"].stringValue + ".png"
+        var screenshotsFiles = [String]()
+        var prevScreenshotsFile = ""
+        if screenshotsCount > 0 && screenshotNodes.count > 0 {
+            prevScreenshotsFile = "Screenshot_" + screenshotNodes[screenshotNodes.count - 1]["UUID"].stringValue + ".png"
+            screenshotsFiles.append(prevScreenshotsFile)
+        }
+        for index in (screenshotNodes.count - 2).stride(to: 0, by: -1) where screenshotsCount > 0 {
+            let node = screenshotNodes[index]
+            let screenshotsFile = "Screenshot_" + node["UUID"].stringValue + ".png"
+            if excludeIdenticalScreenshots {
+                if !fileManager.contentsEqualAtPath(appScreenShotsPath + screenshotsFile, andPath: appScreenShotsPath + prevScreenshotsFile) {
+                    screenshotsFiles.append(screenshotsFile)
+                }
+            } else {
+                screenshotsFiles.append(screenshotsFile)
+            }
+            if screenshotsFiles.count == screenshotsCount {
+                break
+            }
+            prevScreenshotsFile = screenshotsFile
         }
         if screenshotsFiles.count > 0 {
             // copy and rename the screenshots to a specific folder for the current test
             createFolderOrEmptyIfExistsAtPath(testLastScreenShotsPath)
+            screenshotsFiles = screenshotsFiles.reverse()
             for index in 0..<screenshotsFiles.count {
                 let screenshotFile = appScreenShotsPath + screenshotsFiles[index]
                 let newScreenshotFile = testLastScreenShotsPath + "\(index).png"
@@ -263,11 +282,13 @@ let logsTestPathOption = "logsTestPath"
 let jUnitReportPathOption = "jUnitReportPath"
 let screenshotsPathOption = "screenshotsPath"
 let screenshotsCountOption = "screenshotsCount"
+let excludeIdenticalScreenshotsOption = "excludeIdenticalScreenshots"
 let options: [String: String] = [
     logsTestPathOption: " logs test path",
     jUnitReportPathOption: "JUnit report Path",
     screenshotsPathOption: "last screenshots path",
-    screenshotsCountOption: "last screenshots path"
+    screenshotsCountOption: "last screenshots count",
+    excludeIdenticalScreenshotsOption: "exclude the consecutive identical screenshots"
 ]
 let argumentOptionsParser = ArgumentOptionsParser()
 var parsedOptions = argumentOptionsParser.parseArgs()
@@ -276,6 +297,7 @@ let logsTestPathOptionValue = parsedOptions[logsTestPathOption]
 let jUnitReportPathOptionValue = parsedOptions[jUnitReportPathOption]
 let screenshotsPathOptionValue = parsedOptions[screenshotsPathOption]
 let screenshotsCountOptionValue = parsedOptions[screenshotsCountOption]
+let excludeIdenticalScreenshotsOptionValue = parsedOptions[excludeIdenticalScreenshotsOption]
 
 // ====== options validations ======
 argumentOptionsParser.validateOptionExistsAndIsNotEmpty(optionName: logsTestPathOption, optionValue: logsTestPathOptionValue)
@@ -291,6 +313,9 @@ if let screenshotsCountOptionValue = screenshotsCountOptionValue {
     screenshotsCount = Int(screenshotsCountOptionValue) ?? screenshotsCount
 }
 
+// exclude the consecutive identical screenshots if --excludeIdenticalScreenshots option is present
+var excludeIdenticalScreenshots = excludeIdenticalScreenshotsOptionValue != nil
+
 // generate the report if --jUnitReportPath option is passed
 if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: jUnitReportPathOption, optionValue: jUnitReportPathOptionValue)
@@ -302,5 +327,5 @@ if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
 if let screenshotsPathOptionValue = screenshotsPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: screenshotsPathOption, optionValue: screenshotsPathOptionValue)
     
-    saveLastScreenshots(logsTestPath: logsTestPathOptionValue!, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount)
+    saveLastScreenshots(logsTestPath: logsTestPathOptionValue!, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
 }
