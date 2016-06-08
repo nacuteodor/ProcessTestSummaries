@@ -7,12 +7,13 @@ This tool is an OS X console application which processes the TestSummaries plist
 - if a test fails with a fatal error, that will still appear in the JUnit report as failure
 - an output log of the UI elements interactions is attached to each failed test in the report
 - the last screenshots are saved for each test in a separate folder and in the order they were created in test
+- the consecutive identical screenshots can be excluded, to save just the relevant screenshots
 - the generated files can be easily added as artifacts in Jenkins for the tests job
 
 ## Usage e.g:
 xcodebuild -derivedDataPath $DERIVED_DATA_PATH test
 
-ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPath $REPORTS_PATH/unitTestResult.xml --screenshotsPath $LAST_SCREENSHOTS_PATH --screenshotsCount 10
+ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPath $REPORTS_PATH/unitTestResult.xml --screenshotsPath $LAST_SCREENSHOTS_PATH --screenshotsCount 10 --excludeIdenticalScreenshots
 
 ## Swift supported version:
 Xcode 7.3
