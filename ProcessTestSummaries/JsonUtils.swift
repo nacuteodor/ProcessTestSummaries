@@ -104,10 +104,14 @@ extension JSON {
         let fromStart = relativePath.startsWith(starterSequence) { (element, starter) -> Bool in
             return element == starter
         }
-        if fromStart && relativePath.count == currentPath.count + 1 && !relativePath.contains({ (field) -> Bool in
-            return field == kDescendantsWildcard
-        }) {
-            return absolutePaths
+        if fromStart {
+            // check if the current path is a good path to go, else return
+            let maxPathCount = max(relativePath.count, currentPath.count)
+            let partialRelativePath = [SubscriptType](relativePath.dropLast(maxPathCount - currentPath.count > 0 ? maxPathCount - currentPath.count - 1 : 0))
+            let startsWithCurrentPath =  matchesRelativePath(partialRelativePath, absolutePath: currentPath)
+            if !startsWithCurrentPath {
+                return absolutePaths
+            }
         }
         switch json.type {
         case .Dictionary:
