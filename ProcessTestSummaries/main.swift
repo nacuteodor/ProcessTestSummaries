@@ -209,6 +209,18 @@ func saveLastScreenshots(testSummariesPlistJson testSummariesPlistJson: JSON, lo
 func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String) {
     print("Generate JUnit report xml file from \(logsTestPath) logs test folder to \(jUnitRepPath) file")
 
+    // create the needed path for saving the report
+    var pathTokens = jUnitRepPath.componentsSeparatedByString("/")
+    let reportFileName = pathTokens.count > 0 ? pathTokens.removeLast() : ""
+    if reportFileName.isEmpty {
+        try! CustomErrorType.InvalidArgument(error: "\(jUnitRepPath) JUnit report path has an empty filename.").throwsError()
+    }
+    let fileManager = NSFileManager.defaultManager()
+    let jUnitRepParentDir = jUnitRepPath.stringByReplacingOccurrencesOfString("/" + reportFileName, withString: "")
+    createFolderOrEmptyIfExistsAtPath(jUnitRepParentDir, emptyPath: false)
+    let testsCrashLogsPath = jUnitRepParentDir + "/CrashLogs/"
+    let crashLogsPath = logsTestPath + "/Attachments/"
+
     // parse the TestSummaries plist file and create the JUnit xml document
     let testSuitesNode = NSXMLElement(name: "testsuites")
     let jUnitXml = NSXMLDocument(rootElement: testSuitesNode)
@@ -218,6 +230,7 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
     let subtestsJsonPath: [SubscriptType] = ["Subtests"]
     let targetNameJsonPath: [SubscriptType] = ["TargetName"]
     let testNameJsonPath: [SubscriptType] = ["TestName"]
+    let testIdentifierJsonPath: [SubscriptType] = ["TestIdentifier"]
     let testStatusJsonPath: [SubscriptType] = ["TestStatus"]
     let failureSummariesJsonPath: [SubscriptType] = ["FailureSummaries"]
     let activitySummariesJsonPath: [SubscriptType] = ["ActivitySummaries"]
@@ -227,6 +240,9 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
     let finishTimeIntervalJsonPath: [SubscriptType] = ["FinishTimeInterval"]
     let fileNameJsonPath: [SubscriptType] = ["FileName"]
     let lineNumberJsonPath: [SubscriptType] = ["LineNumber"]
+    let hasDiagnosticReportDataJsonPath: [SubscriptType] = ["HasDiagnosticReportData"]
+    let diagnosticReportFileNameJsonPath: [SubscriptType] = ["DiagnosticReportFileName"]
+    let uuidJsonPath: [SubscriptType] = ["UUID"]
 
     let testableSummariesJsons = testSummariesPlistJson[testableSummariesJsonPath].arrayValue
     var totalTestsCount = 0
@@ -243,7 +259,6 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
             var failuresCount = 0
             for testCaseJson in testCasesJsons {
                 let testCaseNode = NSXMLElement(name: "testcase")
-
                 let testCaseName = testCaseJson[testNameJsonPath].stringValue.stringByReplacingOccurrencesOfString("()", withString: "")
                 let testCaseStatus =  testCaseJson[testStatusJsonPath].stringValue
 
@@ -265,6 +280,23 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
                         failureStackTrace = fileName + ":" + String(lineNumber)
                     }
                     outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath))
+                    let crashSummaries: [JSON] = activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, withValue: JSON(true))
+                    // if we have a crash log for the current test, save it
+                    if crashSummaries.count > 0 {
+                        let crashSummary = crashSummaries[0]
+                        let crashFilename = crashSummary[diagnosticReportFileNameJsonPath].stringValue.stringByReplacingOccurrencesOfString(".crash", withString: "") + "_" + crashSummary[uuidJsonPath].stringValue + ".crash"
+                        let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
+                        let savedCrashLogName = testIdentifier.stringByReplacingOccurrencesOfString("/", withString: "_").stringByReplacingOccurrencesOfString("()", withString: "") + ".crash.txt"
+                        let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
+                        createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath)
+                        let crashLogsFile = crashLogsPath + crashFilename
+                        do {
+                            try fileManager.copyItemAtPath(crashLogsFile, toPath: newTestCrashLogFile)
+                        } catch let e {
+                            try! CustomErrorType.InvalidState(error: "Error when copying \(crashLogsFile) file to \(newTestCrashLogFile) : \(e)").throwsError()
+                        }
+                        print("Saved the crash to path: \(newTestCrashLogFile)")
+                    }
 
                     let failureNode = NSXMLElement(name: "failure", stringValue: failureStackTrace)
                     let messageAttr = NSXMLNode.attributeWithName("message", stringValue: failureMessage)  as! NSXMLNode
@@ -307,17 +339,8 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
     let testSuitesFailuresAttr = NSXMLNode.attributeWithName("failures", stringValue: String(totalFailuresCount)) as! NSXMLNode
     testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr]
 
-    // create the needed path for saving the report
-    var pathTokens = jUnitRepPath.componentsSeparatedByString("/")
-    let reportFileName = pathTokens.count > 0 ? pathTokens.removeLast() : ""
-    if reportFileName.isEmpty {
-        try! CustomErrorType.InvalidArgument(error: "\(jUnitRepPath) JUnit report path has an empty filename.").throwsError()
-    }
-    let jUnitRepParentDir = jUnitRepPath.stringByReplacingOccurrencesOfString("/" + reportFileName, withString: "")
-    createFolderOrEmptyIfExistsAtPath(jUnitRepParentDir, emptyPath: false)
-
     // finally, save the xml report
-    let xmlData = jUnitXml.XMLDataWithOptions(Int(NSXMLNodePrettyPrint))
+    let xmlData = jUnitXml.XMLDataWithOptions(Int(NSXMLNodeOptions.NodePrettyPrint.rawValue))
     if !xmlData.writeToFile(jUnitRepPath, atomically: false) {
         try! CustomErrorType.InvalidArgument(error: "Writing xml data to file \(jUnitRepPath) failed!").throwsError()
     }

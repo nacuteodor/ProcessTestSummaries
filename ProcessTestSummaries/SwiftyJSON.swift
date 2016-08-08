@@ -40,7 +40,7 @@ public let ErrorNotExist: Int! = 500
 
  See http://tools.ietf.org/html/rfc7231#section-4.3
  */
-public enum Type :Int{
+public enum Type: Int{
 
     case Number
     case String
@@ -64,7 +64,7 @@ public struct JSON {
 
      - returns: The created JSON
      */
-    public init(data:NSData, options opt: NSJSONReadingOptions = .AllowFragments, error: NSErrorPointer = nil) {
+    public init(data: NSData, options opt: NSJSONReadingOptions = .AllowFragments, error: NSErrorPointer = nil) {
         do {
             let object: AnyObject = try NSJSONSerialization.JSONObjectWithData(data, options: opt)
             self.init(object)
@@ -92,7 +92,7 @@ public struct JSON {
 
      - returns: The created JSON
      */
-    public init(_ jsonArray:[JSON]) {
+    public init(_ jsonArray: [JSON]) {
         self.init(jsonArray.map { $0.object })
     }
 
@@ -186,7 +186,7 @@ extension JSON : Swift.SequenceType {
             let array_ = object as! [AnyObject]
             var generate_ = array_.generate()
             var index_: Int = 0
-            return anyGenerator {
+            return AnyGenerator {
                 if let element_: AnyObject = generate_.next() {
                     return ("\(index_++)", JSON(element_))
                 } else {
@@ -196,7 +196,7 @@ extension JSON : Swift.SequenceType {
         case .Dictionary:
             let dictionary_ = object as! [String : AnyObject]
             var generate_ = dictionary_.generate()
-            return anyGenerator {
+            return AnyGenerator {
                 if let (key_, value_): (String, AnyObject) = generate_.next() {
                     return (key_, JSON(value_))
                 } else {
@@ -204,7 +204,7 @@ extension JSON : Swift.SequenceType {
                 }
             }
         default:
-            return anyGenerator {
+            return AnyGenerator {
                 return nil
             }
         }
@@ -536,7 +536,7 @@ extension JSON {
 
 extension JSON {
 
-    private func _map<Key:Hashable ,Value, NewValue>(source: [Key: Value], transform: Value -> NewValue) -> [Key: NewValue] {
+    private func _map<Key: Hashable ,Value, NewValue>(source: [Key: Value], transform: Value -> NewValue) -> [Key: NewValue] {
         var result = [Key: NewValue](minimumCapacity:source.count)
         for (key,value) in source {
             result[key] = transform(value)
@@ -1111,7 +1111,7 @@ private let falseObjCType = String.fromCString(falseNumber.objCType)
 // MARK: - NSNumber: Comparable
 
 extension NSNumber: Swift.Comparable {
-    var isBool:Bool {
+    var isBool: Bool {
         get {
             let objCType = String.fromCString(self.objCType)
             if (self.compare(trueNumber) == NSComparisonResult.OrderedSame &&  objCType == trueObjCType) ||  (self.compare(falseNumber) == NSComparisonResult.OrderedSame && objCType == falseObjCType){
