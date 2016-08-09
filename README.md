@@ -23,3 +23,6 @@ Xcode 8, Swift 2.3
 
 ## Contact
 [Profile](http://nacuteodor.wix.com/profile)
+
+## Related projects:
+https://github.com/nacuteodor/SearchInJenkinsLogs
