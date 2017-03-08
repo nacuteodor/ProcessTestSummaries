@@ -319,7 +319,7 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
                     var testLastScreenShotsLinks: String = ""
                     if !testLastScreenShotsLink.isEmpty {
                         let jenkinsScreenshotsLink = "\(testLastScreenShotsLink)\(testIdentifier.stringByReplacingOccurrencesOfString("/", withString: "_").stringByReplacingOccurrencesOfString("()", withString: ""))/"
-                        testLastScreenShotsLinks = "Last Screenshots: \(jenkinsScreenshotsLink)\n\n"
+                        testLastScreenShotsLinks = "Last Screenshots: \(jenkinsScreenshotsLink)\n \n"
                         for i in (0..<screenshotsCount).reverse()  {
                             testLastScreenShotsLinks.appendContentsOf(jenkinsScreenshotsLink.stringByAppendingString("\(i).png\n"))
                         }
