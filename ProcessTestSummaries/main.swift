@@ -160,7 +160,7 @@ func saveLastScreenshots(testSummariesPlistJson testSummariesPlistJson: JSON, lo
     let failedTests = testSummariesPlistJson.getParentValuesFor(relativePath: testStatusJsonPath, withValue: JSON("Failure"))
     for failedTestNode in failedTests {
         let testIdentifier = failedTestNode[testIdentifierJsonPath].stringValue
-        let testLastScreenShotsPath = lastScreenshotsPath + "/\(testIdentifier.stringByReplacingOccurrencesOfString("/", withString: "_"))/"
+        let testLastScreenShotsPath = lastScreenshotsPath + "/\(testIdentifier.stringByReplacingOccurrencesOfString("/", withString: "_").stringByReplacingOccurrencesOfString("()", withString: ""))/"
 
         // extract the last screenshotsCount screenshots filenames of the test
         var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasScreenshotData"], withValue: JSON(true))
@@ -205,8 +205,17 @@ func saveLastScreenshots(testSummariesPlistJson testSummariesPlistJson: JSON, lo
     }
 }
 
+/// Get Jenkins build relative last screenshots path
+func getJenkinsLastScreenshotsPath(lastScreenshotsPath: String, junitPath: String) -> String {
+    let commonPath = lastScreenshotsPath.commonPrefixWithString(junitPath, options: NSStringCompareOptions.LiteralSearch)
+
+    return lastScreenshotsPath.stringByReplacingOccurrencesOfString(commonPath, withString: "")
+}
+
 /// Generate JUnit report xml file from TestSummaries plist file from @logsTestPath logs test folder at path @jUnitRepPath
-func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String) {
+/// - parameter lastScreenshotsPath: used to compute the Jenkins relative path to build artifacts
+/// - parameter buildUrl: Jenkins build url $BUILD_URL environment variable
+func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?) {
     print("Generate JUnit report xml file from \(logsTestPath) logs test folder to \(jUnitRepPath) file")
 
     // create the needed path for saving the report
@@ -218,6 +227,11 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
     let fileManager = NSFileManager.defaultManager()
     let jUnitRepParentDir = jUnitRepPath.stringByReplacingOccurrencesOfString("/" + reportFileName, withString: "")
     createFolderOrEmptyIfExistsAtPath(jUnitRepParentDir, emptyPath: false)
+    var testLastScreenShotsLink: String = ""
+    if let lastScreenshotsPath = lastScreenshotsPath, buildUrl = buildUrl {
+        let screenshotsPath = getJenkinsLastScreenshotsPath(lastScreenshotsPath, junitPath: jUnitRepParentDir)
+        testLastScreenShotsLink = "\(buildUrl)artifact/\(screenshotsPath)/"
+    }
     let testsCrashLogsPath = jUnitRepParentDir + "/CrashLogs/"
     let crashLogsPath = logsTestPath + "/Attachments/"
 
@@ -259,6 +273,7 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
             var failuresCount = 0
             for testCaseJson in testCasesJsons {
                 let testCaseNode = NSXMLElement(name: "testcase")
+                let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
                 let testCaseName = testCaseJson[testNameJsonPath].stringValue.stringByReplacingOccurrencesOfString("()", withString: "")
                 let testCaseStatus =  testCaseJson[testStatusJsonPath].stringValue
 
@@ -301,7 +316,15 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
                     let failureNode = NSXMLElement(name: "failure", stringValue: failureStackTrace)
                     let messageAttr = NSXMLNode.attributeWithName("message", stringValue: failureMessage)  as! NSXMLNode
                     failureNode.attributes = [messageAttr]
-                    let systemOutNode = NSXMLElement(name: "system-out", stringValue: validXMLString(outputLogs.joinWithSeparator("\n")))
+                    var testLastScreenShotsLinks: String = ""
+                    if !testLastScreenShotsLink.isEmpty {
+                        let jenkinsScreenshotsLink = "\(testLastScreenShotsLink)\(testIdentifier.stringByReplacingOccurrencesOfString("/", withString: "_").stringByReplacingOccurrencesOfString("()", withString: ""))/"
+                        testLastScreenShotsLinks = "Last Screenshots: \(jenkinsScreenshotsLink)\n\n"
+                        for i in (0..<screenshotsCount).reverse()  {
+                            testLastScreenShotsLinks.appendContentsOf(jenkinsScreenshotsLink.stringByAppendingString("\(i).png\n"))
+                        }
+                    }
+                    let systemOutNode = NSXMLElement(name: "system-out", stringValue: testLastScreenShotsLinks + validXMLString(outputLogs.joinWithSeparator("\n")))
                     testCaseNode.addChild(failureNode)
                     testCaseNode.addChild(systemOutNode)
                 }
@@ -355,12 +378,14 @@ let jUnitReportPathOption = "jUnitReportPath"
 let screenshotsPathOption = "screenshotsPath"
 let screenshotsCountOption = "screenshotsCount"
 let excludeIdenticalScreenshotsOption = "excludeIdenticalScreenshots"
+let buildUrlOption = "buildUrl"
 let options: [String: String] = [
     logsTestPathOption: " logs test path",
     jUnitReportPathOption: "JUnit report Path",
     screenshotsPathOption: "last screenshots path",
     screenshotsCountOption: "last screenshots count",
-    excludeIdenticalScreenshotsOption: "exclude the consecutive identical screenshots"
+    excludeIdenticalScreenshotsOption: "exclude the consecutive identical screenshots",
+    buildUrlOption: "Jenkins BUILD_URL variable"
 ]
 let argumentOptionsParser = ArgumentOptionsParser()
 var parsedOptions = argumentOptionsParser.parseArgs()
@@ -370,6 +395,7 @@ let jUnitReportPathOptionValue = parsedOptions[jUnitReportPathOption]
 let screenshotsPathOptionValue = parsedOptions[screenshotsPathOption]
 let screenshotsCountOptionValue = parsedOptions[screenshotsCountOption]
 let excludeIdenticalScreenshotsOptionValue = parsedOptions[excludeIdenticalScreenshotsOption]
+let buildUrlOptionValue = parsedOptions[buildUrlOption]
 
 // ====== options validations ======
 argumentOptionsParser.validateOptionExistsAndIsNotEmpty(optionName: logsTestPathOption, optionValue: logsTestPathOptionValue)
@@ -391,16 +417,16 @@ var excludeIdenticalScreenshots = excludeIdenticalScreenshotsOptionValue != nil
 let logsTestPath = logsTestPathOptionValue!
 let testSummariesPlistJson = getTestSummariesPlistJson(logsTestPath: logsTestPath)
 
+// save the last screenshots if --screenshotsPath option is passed
+if let screenshotsPathOptionValue = screenshotsPathOptionValue {
+    argumentOptionsParser.validateOptionIsNotEmpty(optionName: screenshotsPathOption, optionValue: screenshotsPathOptionValue)
+
+    saveLastScreenshots(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
+}
+
 // generate the report if --jUnitReportPath option is passed
 if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: jUnitReportPathOption, optionValue: jUnitReportPathOptionValue)
 
-    generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: jUnitReportPathOptionValue)
-}
-
-// save the last screenshots if --screenshotsPath option is passed
-if let screenshotsPathOptionValue = screenshotsPathOptionValue {
-    argumentOptionsParser.validateOptionIsNotEmpty(optionName: screenshotsPathOption, optionValue: screenshotsPathOptionValue)
-    
-    saveLastScreenshots(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
+    generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: jUnitReportPathOptionValue, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue)
 }
