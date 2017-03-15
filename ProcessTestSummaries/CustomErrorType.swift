@@ -8,9 +8,9 @@
 
 import Foundation
 
-enum CustomErrorType: ErrorType {
-    case InvalidArgument(error: String)
-    case InvalidState(error: String)
+enum CustomErrorType: Error {
+    case invalidArgument(error: String)
+    case invalidState(error: String)
 
     var error: String {
         return "[Error] \(self)"
