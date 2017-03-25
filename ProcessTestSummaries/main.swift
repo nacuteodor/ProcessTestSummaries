@@ -7,20 +7,44 @@
 //
 
 import Foundation
+// FIXME: comparison operators with optionals were removed from the Swift Standard Libary.
+// Consider refactoring the code to use the non-optional operators.
+fileprivate func < <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
+  switch (lhs, rhs) {
+  case let (l?, r?):
+    return l < r
+  case (nil, _?):
+    return true
+  default:
+    return false
+  }
+}
 
-private func getInvalidXMLCharacterSet() -> NSCharacterSet {
+// FIXME: comparison operators with optionals were removed from the Swift Standard Libary.
+// Consider refactoring the code to use the non-optional operators.
+fileprivate func > <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
+  switch (lhs, rhs) {
+  case let (l?, r?):
+    return l > r
+  default:
+    return rhs < lhs
+  }
+}
+
+
+private func getInvalidXMLCharacterSet() -> CharacterSet {
     // First, create a character set containing all valid UTF8 characters.
     let xmlCharacterSet = NSMutableCharacterSet()
-    xmlCharacterSet.addCharactersInRange(NSMakeRange(0x9, 1))
-    xmlCharacterSet.addCharactersInRange(NSMakeRange(0xA, 1))
-    xmlCharacterSet.addCharactersInRange(NSMakeRange(0xD, 1))
-    xmlCharacterSet.addCharactersInRange(NSMakeRange(0x20, 0xD7FF - 0x20))
-    xmlCharacterSet.addCharactersInRange(NSMakeRange(0xE000, 0xFFFD - 0xE000))
-    xmlCharacterSet.addCharactersInRange(NSMakeRange(0x10000, 0x10FFFF - 0x10000))
+    xmlCharacterSet.addCharacters(in: NSMakeRange(0x9, 1))
+    xmlCharacterSet.addCharacters(in: NSMakeRange(0xA, 1))
+    xmlCharacterSet.addCharacters(in: NSMakeRange(0xD, 1))
+    xmlCharacterSet.addCharacters(in: NSMakeRange(0x20, 0xD7FF - 0x20))
+    xmlCharacterSet.addCharacters(in: NSMakeRange(0xE000, 0xFFFD - 0xE000))
+    xmlCharacterSet.addCharacters(in: NSMakeRange(0x10000, 0x10FFFF - 0x10000))
 
     // Then create and retain an inverted set, which will thus contain all invalid XML characters.
     //    invalidXMLCharacterSet = xmlCharacterSet.invertedSet
-    return xmlCharacterSet.invertedSet
+    return xmlCharacterSet.inverted
 }
 
 // First create a character set containing all invalid XML characters.
@@ -29,15 +53,15 @@ private func getInvalidXMLCharacterSet() -> NSCharacterSet {
 private let invalidXMLCharacterSet = getInvalidXMLCharacterSet()
 
 /// Override XCTFail method to avoid importing XCTest framework for JSON extension
-func XCTFail(message: String) {
-    try! CustomErrorType.InvalidState(error: message).throwsError()
+func XCTFail(_ message: String) {
+    try! CustomErrorType.invalidState(error: message).throwsError()
 }
 
-func contentsOfDirectoryAtPath(path: String) -> [String]? {
-    let fileManager = NSFileManager.defaultManager()
-    if fileManager.fileExistsAtPath(path) {
+func contentsOfDirectoryAtPath(_ path: String) -> [String]? {
+    let fileManager = FileManager.default
+    if fileManager.fileExists(atPath: path) {
         do {
-            return try fileManager.contentsOfDirectoryAtPath(path)
+            return try fileManager.contentsOfDirectory(atPath: path)
         } catch {
             print("Unable to access path \(path)")
             return nil
@@ -46,17 +70,17 @@ func contentsOfDirectoryAtPath(path: String) -> [String]? {
     return [String]()
 }
 
-func createFolderOrEmptyIfExistsAtPath(path: String, emptyPath: Bool = true) -> Bool {
+func createFolderOrEmptyIfExistsAtPath(_ path: String, emptyPath: Bool = true) -> Bool {
     var containerSetupSuccess = true
     let filenames = contentsOfDirectoryAtPath(path)
     if filenames == nil {
         containerSetupSuccess = false
     } else {
-        let fileManager = NSFileManager.defaultManager()
-        if !fileManager.fileExistsAtPath(path) {
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: path) {
             // Folder doesn't exist at the specified path, we need to construct the folder structure
             do {
-                try fileManager.createDirectoryAtPath(path, withIntermediateDirectories: true, attributes: nil)
+                try fileManager.createDirectory(atPath: path, withIntermediateDirectories: true, attributes: nil)
             } catch {
                 print("Cannot create folder container at path: \(path)")
                 containerSetupSuccess = false
@@ -65,8 +89,8 @@ func createFolderOrEmptyIfExistsAtPath(path: String, emptyPath: Bool = true) -> 
             if emptyPath && filenames?.count > 0 {
                 for filePath in filenames! {
                     do { // no op
-                        let completePath = path.stringByAppendingString(filePath)
-                        try fileManager.removeItemAtPath(completePath)
+                        let completePath = path + filePath
+                        try fileManager.removeItem(atPath: completePath)
                     } catch {
                         containerSetupSuccess = false
                         print("Unable empty old content at path: \(path)")
@@ -78,7 +102,7 @@ func createFolderOrEmptyIfExistsAtPath(path: String, emptyPath: Bool = true) -> 
     return containerSetupSuccess
 }
 
-func validXMLString(string: String) -> String {
+func validXMLString(_ string: String) -> String {
     // Not all UTF8 characters are valid XML.
     // See:
     // http://www.w3.org/TR/2000/REC-xml-20001006#NT-Char
@@ -91,19 +115,19 @@ func validXMLString(string: String) -> String {
     // do not fall within the above ranges.
 
     // Are there any invalid characters in this string?
-    var range = string.rangeOfCharacterFromSet(invalidXMLCharacterSet)
+    var range = string.rangeOfCharacter(from: invalidXMLCharacterSet)
 
     // If not, just return self unaltered.
-    if range == nil || range?.count == 0 {
+    if range == nil || range!.isEmpty {
         return string
     }
 
     // Otherwise go through and remove any illegal XML characters from a copy of the string.
     var cleanedString = string
 
-    while range != nil && range?.count > 0 {
-        cleanedString.removeRange(range!)
-        range = cleanedString.rangeOfCharacterFromSet(invalidXMLCharacterSet)
+    while range != nil && range!.isEmpty == false {
+        cleanedString.removeSubrange(range!)
+        range = cleanedString.rangeOfCharacter(from: invalidXMLCharacterSet)
     }
 
     return cleanedString
@@ -111,16 +135,16 @@ func validXMLString(string: String) -> String {
 
 
 
-private func findTestSummariesPlistFile(logsTestPath logsTestPath: String) -> String {
+private func findTestSummariesPlistFile(logsTestPath: String) -> String {
     let summariesPlistSuffix = "TestSummaries.plist"
     var summariesPlistFile = ""
     var logsTestFiles = [String]()
-    let fileManager = NSFileManager.defaultManager()
-    if fileManager.fileExistsAtPath(logsTestPath) {
+    let fileManager = FileManager.default
+    if fileManager.fileExists(atPath: logsTestPath) {
         do {
-            logsTestFiles = try fileManager.contentsOfDirectoryAtPath(logsTestPath)
+            logsTestFiles = try fileManager.contentsOfDirectory(atPath: logsTestPath)
         } catch let e {
-            try! CustomErrorType.InvalidState(error: "Error when getting files from \(logsTestPath) path : \(e)").throwsError()
+            try! CustomErrorType.invalidState(error: "Error when getting files from \(logsTestPath) path : \(e)").throwsError()
         }
     }
     for file in logsTestFiles {
@@ -132,7 +156,7 @@ private func findTestSummariesPlistFile(logsTestPath logsTestPath: String) -> St
     return summariesPlistFile
 }
 
-private func getTestSummariesPlistJson(logsTestPath logsTestPath: String) -> JSON {
+private func getTestSummariesPlistJson(logsTestPath: String) -> JSON {
     let summariesPlistFile = findTestSummariesPlistFile(logsTestPath: logsTestPath)
 
     let summariesPlistDict = (NSDictionary(contentsOfFile: summariesPlistFile) as? Dictionary<String, AnyObject>) ?? Dictionary<String, AnyObject>()
@@ -142,25 +166,25 @@ private func getTestSummariesPlistJson(logsTestPath logsTestPath: String) -> JSO
 /// Save the last @screenshotsCount screenshots to @lastScreenshotsPath folder from @logsTestPath test logs for failed tests
 /// if screenshotsCount is -1 then save all screenshots available
 /// - parameter excludeIdenticalScreenshots: excludes the consecutive identical screenshots, to get the relevant screenshots
-func saveLastScreenshots(testSummariesPlistJson testSummariesPlistJson: JSON, logsTestPath: String, lastScreenshotsPath: String, screenshotsCount: Int, excludeIdenticalScreenshots: Bool = false) {
+func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, lastScreenshotsPath: String, screenshotsCount: Int, excludeIdenticalScreenshots: Bool = false) {
     print("Save last \(screenshotsCount) screenshots from \(logsTestPath) logs test folder to \(lastScreenshotsPath) folder")
     if logsTestPath.isEmpty {
-        try! CustomErrorType.InvalidArgument(error: "Tests logs path is empty.").throwsError()
+        try! CustomErrorType.invalidArgument(error: "Tests logs path is empty.").throwsError()
     }
     if lastScreenshotsPath.isEmpty {
-        try! CustomErrorType.InvalidArgument(error: "Last screenshots path is empty.").throwsError()
+        try! CustomErrorType.invalidArgument(error: "Last screenshots path is empty.").throwsError()
     }
 
-    let fileManager = NSFileManager.defaultManager()
+    let fileManager = FileManager.default
     let appScreenShotsPath = logsTestPath + "/Attachments/"
-    let testJsonPath: [SubscriptType] = ["^", "TestableSummaries", ".", "Tests", ".", "Subtests", ".", "Subtests", ".", "Subtests", "."]
-    let testStatusJsonPath: [SubscriptType] = testJsonPath + ["TestStatus"]
-    let testIdentifierJsonPath: [SubscriptType] = ["TestIdentifier"]
+    let testJsonPath: [JSONSubscriptType] = ["^", "TestableSummaries", ".", "Tests", ".", "Subtests", ".", "Subtests", ".", "Subtests", "."]
+    let testStatusJsonPath: [JSONSubscriptType] = testJsonPath + ["TestStatus"]
+    let testIdentifierJsonPath: [JSONSubscriptType] = ["TestIdentifier"]
     // extract the failed test nodes for finding the test screenshots
     let failedTests = testSummariesPlistJson.getParentValuesFor(relativePath: testStatusJsonPath, withValue: JSON("Failure"))
     for failedTestNode in failedTests {
         let testIdentifier = failedTestNode[testIdentifierJsonPath].stringValue
-        let testLastScreenShotsPath = lastScreenshotsPath + "/\(testIdentifier.stringByReplacingOccurrencesOfString("/", withString: "_").stringByReplacingOccurrencesOfString("()", withString: ""))/"
+        let testLastScreenShotsPath = lastScreenshotsPath + "/\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
 
         // extract the last screenshotsCount screenshots filenames of the test
         var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasScreenshotData"], withValue: JSON(true))
@@ -172,11 +196,11 @@ func saveLastScreenshots(testSummariesPlistJson testSummariesPlistJson: JSON, lo
             prevScreenshotsFile = "Screenshot_" + screenshotNodes[screenshotNodes.count - 1]["UUID"].stringValue + ".png"
             screenshotsFiles.append(prevScreenshotsFile)
         }
-        for index in (screenshotNodes.count - 2).stride(to: 0, by: -1) where screenshotsCount > 0 {
+        for index in stride(from: (screenshotNodes.count - 2), to: 0, by: -1) where screenshotsCount > 0 {
             let node = screenshotNodes[index]
             let screenshotsFile = "Screenshot_" + node["UUID"].stringValue + ".png"
             if excludeIdenticalScreenshots {
-                if !fileManager.contentsEqualAtPath(appScreenShotsPath + screenshotsFile, andPath: appScreenShotsPath + prevScreenshotsFile) {
+                if !fileManager.contentsEqual(atPath: appScreenShotsPath + screenshotsFile, andPath: appScreenShotsPath + prevScreenshotsFile) {
                     screenshotsFiles.append(screenshotsFile)
                 }
             } else {
@@ -190,14 +214,14 @@ func saveLastScreenshots(testSummariesPlistJson testSummariesPlistJson: JSON, lo
         if screenshotsFiles.count > 0 {
             // copy and rename the screenshots to a specific folder for the current test
             createFolderOrEmptyIfExistsAtPath(testLastScreenShotsPath)
-            screenshotsFiles = screenshotsFiles.reverse()
+            screenshotsFiles = screenshotsFiles.reversed()
             for index in 0..<screenshotsFiles.count {
                 let screenshotFile = appScreenShotsPath + screenshotsFiles[index]
                 let newScreenshotFile = testLastScreenShotsPath + "\(index).png"
                 do {
-                    try fileManager.copyItemAtPath(screenshotFile, toPath: newScreenshotFile)
+                    try fileManager.copyItem(atPath: screenshotFile, toPath: newScreenshotFile)
                 } catch let e {
-                    try! CustomErrorType.InvalidState(error: "Error when copying \(screenshotFile) file to \(newScreenshotFile) : \(e)").throwsError()
+                    try! CustomErrorType.invalidState(error: "Error when copying \(screenshotFile) file to \(newScreenshotFile) : \(e)").throwsError()
                 }
             }
             print("Saved the last \(screenshotsCount) screenshots at path: \(testLastScreenShotsPath) ")
@@ -206,29 +230,29 @@ func saveLastScreenshots(testSummariesPlistJson testSummariesPlistJson: JSON, lo
 }
 
 /// Get Jenkins build relative last screenshots path
-func getJenkinsLastScreenshotsPath(lastScreenshotsPath: String, junitPath: String) -> String {
-    let commonPath = lastScreenshotsPath.commonPrefixWithString(junitPath, options: NSStringCompareOptions.LiteralSearch)
+func getJenkinsLastScreenshotsPath(_ lastScreenshotsPath: String, junitPath: String) -> String {
+    let commonPath = lastScreenshotsPath.commonPrefix(with: junitPath, options: NSString.CompareOptions.literal)
 
-    return lastScreenshotsPath.stringByReplacingOccurrencesOfString(commonPath, withString: "")
+    return lastScreenshotsPath.replacingOccurrences(of: commonPath, with: "")
 }
 
 /// Generate JUnit report xml file from TestSummaries plist file from @logsTestPath logs test folder at path @jUnitRepPath
 /// - parameter lastScreenshotsPath: used to compute the Jenkins relative path to build artifacts
 /// - parameter buildUrl: Jenkins build url $BUILD_URL environment variable
-func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?) {
+func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?) {
     print("Generate JUnit report xml file from \(logsTestPath) logs test folder to \(jUnitRepPath) file")
 
     // create the needed path for saving the report
-    var pathTokens = jUnitRepPath.componentsSeparatedByString("/")
+    var pathTokens = jUnitRepPath.components(separatedBy: "/")
     let reportFileName = pathTokens.count > 0 ? pathTokens.removeLast() : ""
     if reportFileName.isEmpty {
-        try! CustomErrorType.InvalidArgument(error: "\(jUnitRepPath) JUnit report path has an empty filename.").throwsError()
+        try! CustomErrorType.invalidArgument(error: "\(jUnitRepPath) JUnit report path has an empty filename.").throwsError()
     }
-    let fileManager = NSFileManager.defaultManager()
-    let jUnitRepParentDir = jUnitRepPath.stringByReplacingOccurrencesOfString("/" + reportFileName, withString: "")
+    let fileManager = FileManager.default
+    let jUnitRepParentDir = jUnitRepPath.replacingOccurrences(of: "/" + reportFileName, with: "")
     createFolderOrEmptyIfExistsAtPath(jUnitRepParentDir, emptyPath: false)
     var testLastScreenShotsLink: String = ""
-    if let lastScreenshotsPath = lastScreenshotsPath, buildUrl = buildUrl {
+    if let lastScreenshotsPath = lastScreenshotsPath, let buildUrl = buildUrl {
         let screenshotsPath = getJenkinsLastScreenshotsPath(lastScreenshotsPath, junitPath: jUnitRepParentDir)
         testLastScreenShotsLink = "\(buildUrl)artifact/\(screenshotsPath)/"
     }
@@ -236,27 +260,27 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
     let crashLogsPath = logsTestPath + "/Attachments/"
 
     // parse the TestSummaries plist file and create the JUnit xml document
-    let testSuitesNode = NSXMLElement(name: "testsuites")
-    let jUnitXml = NSXMLDocument(rootElement: testSuitesNode)
+    let testSuitesNode = XMLElement(name: "testsuites")
+    let jUnitXml = XMLDocument(rootElement: testSuitesNode)
 
-    let testableSummariesJsonPath: [SubscriptType] = ["TestableSummaries"]
-    let testSuitesJsonPath: [SubscriptType] = ["^", "Tests", ".", "Subtests", ".", "Subtests", "."]
-    let subtestsJsonPath: [SubscriptType] = ["Subtests"]
-    let targetNameJsonPath: [SubscriptType] = ["TargetName"]
-    let testNameJsonPath: [SubscriptType] = ["TestName"]
-    let testIdentifierJsonPath: [SubscriptType] = ["TestIdentifier"]
-    let testStatusJsonPath: [SubscriptType] = ["TestStatus"]
-    let failureSummariesJsonPath: [SubscriptType] = ["FailureSummaries"]
-    let activitySummariesJsonPath: [SubscriptType] = ["ActivitySummaries"]
-    let titleJsonPath: [SubscriptType] = ["Title"]
-    let messageJsonPath: [SubscriptType] = ["Message"]
-    let startTimeIntervalJsonPath: [SubscriptType] = ["StartTimeInterval"]
-    let finishTimeIntervalJsonPath: [SubscriptType] = ["FinishTimeInterval"]
-    let fileNameJsonPath: [SubscriptType] = ["FileName"]
-    let lineNumberJsonPath: [SubscriptType] = ["LineNumber"]
-    let hasDiagnosticReportDataJsonPath: [SubscriptType] = ["HasDiagnosticReportData"]
-    let diagnosticReportFileNameJsonPath: [SubscriptType] = ["DiagnosticReportFileName"]
-    let uuidJsonPath: [SubscriptType] = ["UUID"]
+    let testableSummariesJsonPath: [JSONSubscriptType] = ["TestableSummaries"]
+    let testSuitesJsonPath: [JSONSubscriptType] = ["^", "Tests", ".", "Subtests", ".", "Subtests", "."]
+    let subtestsJsonPath: [JSONSubscriptType] = ["Subtests"]
+    let targetNameJsonPath: [JSONSubscriptType] = ["TargetName"]
+    let testNameJsonPath: [JSONSubscriptType] = ["TestName"]
+    let testIdentifierJsonPath: [JSONSubscriptType] = ["TestIdentifier"]
+    let testStatusJsonPath: [JSONSubscriptType] = ["TestStatus"]
+    let failureSummariesJsonPath: [JSONSubscriptType] = ["FailureSummaries"]
+    let activitySummariesJsonPath: [JSONSubscriptType] = ["ActivitySummaries"]
+    let titleJsonPath: [JSONSubscriptType] = ["Title"]
+    let messageJsonPath: [JSONSubscriptType] = ["Message"]
+    let startTimeIntervalJsonPath: [JSONSubscriptType] = ["StartTimeInterval"]
+    let finishTimeIntervalJsonPath: [JSONSubscriptType] = ["FinishTimeInterval"]
+    let fileNameJsonPath: [JSONSubscriptType] = ["FileName"]
+    let lineNumberJsonPath: [JSONSubscriptType] = ["LineNumber"]
+    let hasDiagnosticReportDataJsonPath: [JSONSubscriptType] = ["HasDiagnosticReportData"]
+    let diagnosticReportFileNameJsonPath: [JSONSubscriptType] = ["DiagnosticReportFileName"]
+    let uuidJsonPath: [JSONSubscriptType] = ["UUID"]
 
     let testableSummariesJsons = testSummariesPlistJson[testableSummariesJsonPath].arrayValue
     var totalTestsCount = 0
@@ -266,15 +290,15 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
         let testSuitesJsons = testableSummaryJson.values(relativePath: testSuitesJsonPath)
 
         for testSuitesJson in testSuitesJsons {
-            let testSuiteNode = NSXMLElement(name: "testsuite")
+            let testSuiteNode = XMLElement(name: "testsuite")
 
             let testSuiteName = targetName + "." + testSuitesJson[testNameJsonPath].stringValue
             let testCasesJsons = testSuitesJson[subtestsJsonPath].arrayValue
             var failuresCount = 0
             for testCaseJson in testCasesJsons {
-                let testCaseNode = NSXMLElement(name: "testcase")
+                let testCaseNode = XMLElement(name: "testcase")
                 let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
-                let testCaseName = testCaseJson[testNameJsonPath].stringValue.stringByReplacingOccurrencesOfString("()", withString: "")
+                let testCaseName = testCaseJson[testNameJsonPath].stringValue.replacingOccurrences(of: "()", with: "")
                 let testCaseStatus =  testCaseJson[testStatusJsonPath].stringValue
 
                 var time = "0"
@@ -289,8 +313,8 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
                         let firstFailureSummaryJson = failureSummariesJson[0]
                         failureMessage = validXMLString(firstFailureSummaryJson[messageJsonPath].stringValue)
                         var fileName = firstFailureSummaryJson[fileNameJsonPath].stringValue
-                        let rangeToRemove = fileName.rangeOfString(targetName + "/")
-                        fileName.replaceRange(fileName.startIndex..<(rangeToRemove?.startIndex ?? fileName.startIndex), with: "")
+                        let rangeToRemove = fileName.range(of: targetName + "/")
+                        fileName.replaceSubrange(fileName.startIndex..<(rangeToRemove?.lowerBound ?? fileName.startIndex), with: "")
                         let lineNumber = firstFailureSummaryJson[lineNumberJsonPath].intValue
                         failureStackTrace = fileName + ":" + String(lineNumber)
                     }
@@ -299,32 +323,32 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
                         let crashSummary = crashSummaries[0]
-                        let crashFilename = crashSummary[diagnosticReportFileNameJsonPath].stringValue.stringByReplacingOccurrencesOfString(".crash", withString: "") + "_" + crashSummary[uuidJsonPath].stringValue + ".crash"
+                        let crashFilename = crashSummary[diagnosticReportFileNameJsonPath].stringValue.replacingOccurrences(of: ".crash", with: "") + "_" + crashSummary[uuidJsonPath].stringValue + ".crash"
                         let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
-                        let savedCrashLogName = testIdentifier.stringByReplacingOccurrencesOfString("/", withString: "_").stringByReplacingOccurrencesOfString("()", withString: "") + ".crash.txt"
+                        let savedCrashLogName = testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "") + ".crash.txt"
                         let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
                         createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath)
                         let crashLogsFile = crashLogsPath + crashFilename
                         do {
-                            try fileManager.copyItemAtPath(crashLogsFile, toPath: newTestCrashLogFile)
+                            try fileManager.copyItem(atPath: crashLogsFile, toPath: newTestCrashLogFile)
                         } catch let e {
-                            try! CustomErrorType.InvalidState(error: "Error when copying \(crashLogsFile) file to \(newTestCrashLogFile) : \(e)").throwsError()
+                            try! CustomErrorType.invalidState(error: "Error when copying \(crashLogsFile) file to \(newTestCrashLogFile) : \(e)").throwsError()
                         }
                         print("Saved the crash to path: \(newTestCrashLogFile)")
                     }
 
-                    let failureNode = NSXMLElement(name: "failure", stringValue: failureStackTrace)
-                    let messageAttr = NSXMLNode.attributeWithName("message", stringValue: failureMessage)  as! NSXMLNode
+                    let failureNode = XMLElement(name: "failure", stringValue: failureStackTrace)
+                    let messageAttr = XMLNode.attribute(withName: "message", stringValue: failureMessage)  as! XMLNode
                     failureNode.attributes = [messageAttr]
                     var testLastScreenShotsLinks: String = ""
                     if !testLastScreenShotsLink.isEmpty {
-                        let jenkinsScreenshotsLink = "\(testLastScreenShotsLink)\(testIdentifier.stringByReplacingOccurrencesOfString("/", withString: "_").stringByReplacingOccurrencesOfString("()", withString: ""))/"
+                        let jenkinsScreenshotsLink = "\(testLastScreenShotsLink)\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
                         testLastScreenShotsLinks = "Last Screenshots: \(jenkinsScreenshotsLink)\n \n"
-                        for i in (0..<screenshotsCount).reverse()  {
-                            testLastScreenShotsLinks.appendContentsOf(jenkinsScreenshotsLink.stringByAppendingString("\(i).png\n"))
+                        for i in (0..<screenshotsCount).reversed()  {
+                            testLastScreenShotsLinks.append(jenkinsScreenshotsLink + "\(i).png\n")
                         }
                     }
-                    let systemOutNode = NSXMLElement(name: "system-out", stringValue: testLastScreenShotsLinks + validXMLString(outputLogs.joinWithSeparator("\n")))
+                    let systemOutNode = XMLElement(name: "system-out", stringValue: testLastScreenShotsLinks + validXMLString(outputLogs.joined(separator: "\n")))
                     testCaseNode.addChild(failureNode)
                     testCaseNode.addChild(systemOutNode)
                 }
@@ -332,40 +356,40 @@ func generateJUnitReport(testSummariesPlistJson testSummariesPlistJson: JSON, lo
                     let startTime = Double(activitySummariesJson.arrayValue[0][startTimeIntervalJsonPath].stringValue) ?? 0.0
                     let lastActivitySummaryJson = activitySummariesJson.arrayValue[activitySummariesJson.count - 1]
                     var finishTimeIntervalJsons = lastActivitySummaryJson.values(relativePath: finishTimeIntervalJsonPath)
-                    var finishTimeIntervalJson = finishTimeIntervalJsons.count > 0 ? finishTimeIntervalJsons[finishTimeIntervalJsons.count - 1] : JSON.nullJSON
+                    var finishTimeIntervalJson = finishTimeIntervalJsons.count > 0 ? finishTimeIntervalJsons[finishTimeIntervalJsons.count - 1] : JSON.null
                     if finishTimeIntervalJsons.count == 0 {
                          finishTimeIntervalJsons = lastActivitySummaryJson.values(relativePath: startTimeIntervalJsonPath)
-                        finishTimeIntervalJson = finishTimeIntervalJsons.count > 0 ? finishTimeIntervalJsons[finishTimeIntervalJsons.count - 1] : JSON.nullJSON
+                        finishTimeIntervalJson = finishTimeIntervalJsons.count > 0 ? finishTimeIntervalJsons[finishTimeIntervalJsons.count - 1] : JSON.null
                     }
                     let endTime = Double(finishTimeIntervalJson.stringValue) ?? 0.0
                     time = String(format: "%.3f", endTime - startTime)
                 }
 
-                let classnameAttr = NSXMLNode.attributeWithName("classname", stringValue: testSuiteName)  as! NSXMLNode
-                let nameAttr = NSXMLNode.attributeWithName("name", stringValue: testCaseName) as! NSXMLNode
-                let timeAttr = NSXMLNode.attributeWithName("time", stringValue: time) as! NSXMLNode
+                let classnameAttr = XMLNode.attribute(withName: "classname", stringValue: testSuiteName)  as! XMLNode
+                let nameAttr = XMLNode.attribute(withName: "name", stringValue: testCaseName) as! XMLNode
+                let timeAttr = XMLNode.attribute(withName: "time", stringValue: time) as! XMLNode
                 testCaseNode.attributes = [classnameAttr, nameAttr, timeAttr]
                 testSuiteNode.addChild(testCaseNode)
             }
             totalTestsCount += testCasesJsons.count
             totalFailuresCount += failuresCount
 
-            let testSuiteNameAttr = NSXMLNode.attributeWithName("name", stringValue: testSuiteName)  as! NSXMLNode
-            let testSuiteTestsAttr = NSXMLNode.attributeWithName("tests", stringValue:  String(testCasesJsons.count)) as! NSXMLNode
-            let testSuiteFailuresAttr = NSXMLNode.attributeWithName("failures", stringValue: String(failuresCount)) as! NSXMLNode
+            let testSuiteNameAttr = XMLNode.attribute(withName: "name", stringValue: testSuiteName)  as! XMLNode
+            let testSuiteTestsAttr = XMLNode.attribute(withName: "tests", stringValue:  String(testCasesJsons.count)) as! XMLNode
+            let testSuiteFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(failuresCount)) as! XMLNode
             testSuiteNode.attributes = [testSuiteNameAttr, testSuiteTestsAttr, testSuiteFailuresAttr]
             testSuitesNode.addChild(testSuiteNode)
         }
     }
 
-    let testSuitesTestsAttr = NSXMLNode.attributeWithName("tests", stringValue: String(totalTestsCount))  as! NSXMLNode
-    let testSuitesFailuresAttr = NSXMLNode.attributeWithName("failures", stringValue: String(totalFailuresCount)) as! NSXMLNode
+    let testSuitesTestsAttr = XMLNode.attribute(withName: "tests", stringValue: String(totalTestsCount))  as! XMLNode
+    let testSuitesFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(totalFailuresCount)) as! XMLNode
     testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr]
 
     // finally, save the xml report
-    let xmlData = jUnitXml.XMLDataWithOptions(Int(NSXMLNodeOptions.NodePrettyPrint.rawValue))
-    if !xmlData.writeToFile(jUnitRepPath, atomically: false) {
-        try! CustomErrorType.InvalidArgument(error: "Writing xml data to file \(jUnitRepPath) failed!").throwsError()
+    let xmlData = jUnitXml.xmlData(withOptions: Int(XMLNode.Options.nodePrettyPrint.rawValue))
+    if (try? xmlData.write(to: URL(fileURLWithPath: jUnitRepPath), options: [])) == nil {
+        try! CustomErrorType.invalidArgument(error: "Writing xml data to file \(jUnitRepPath) failed!").throwsError()
     }
 }
 
@@ -402,7 +426,7 @@ argumentOptionsParser.validateOptionExistsAndIsNotEmpty(optionName: logsTestPath
 
 // at least jUnitReportPathOption or screenshotsPathOption should be passed as arguments
 if jUnitReportPathOptionValue == nil && screenshotsPathOptionValue == nil {
-    try! CustomErrorType.InvalidArgument(error: "\(ArgumentOptionsParser.kArgsSeparator)\(jUnitReportPathOption) or \(ArgumentOptionsParser.kArgsSeparator)\(screenshotsPathOption) option value doesn't exist.").throwsError()
+    try! CustomErrorType.invalidArgument(error: "\(ArgumentOptionsParser.kArgsSeparator)\(jUnitReportPathOption) or \(ArgumentOptionsParser.kArgsSeparator)\(screenshotsPathOption) option value doesn't exist.").throwsError()
 }
 
 var screenshotsCount = 5 // the default screenshots count value

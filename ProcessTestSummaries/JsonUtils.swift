@@ -18,7 +18,7 @@ extension JSON {
     /// E.g of json string: {"field1":"value1","field2":"value2","field3":{"field4:value4"}}
     /// - parameter string:  a json string
     public init(string: String) {
-        if let dataFromString = string.dataUsingEncoding(NSUTF8StringEncoding, allowLossyConversion: true) {
+        if let dataFromString = string.data(using: String.Encoding.utf8, allowLossyConversion: true) {
             self.init(data: dataFromString)
         } else {
             self.init(NSNull())
@@ -27,10 +27,10 @@ extension JSON {
 
     /// - returns: true if @absolutePath absolute path matches the @relativePath relative path
     /// The relative match may contain wildcards like "*" for matching descendants of a json node, or "." for matching the children of a json node
-    private static func matchesRelativePath(relativePath: [SubscriptType], absolutePath: [SubscriptType]) -> Bool {
-        let starterSequence: [SubscriptType] = [kStarterWildcard]
+    fileprivate static func matchesRelativePath(_ relativePath: [JSONSubscriptType], absolutePath: [JSONSubscriptType]) -> Bool {
+        let starterSequence: [JSONSubscriptType] = [kStarterWildcard]
         var relativePath = relativePath
-        let fromStart = relativePath.startsWith(starterSequence) { (element, starter) -> Bool in
+        let fromStart = relativePath.starts(with: starterSequence) { (element, starter) -> Bool in
             return element == starter
         }
         if fromStart {
@@ -43,7 +43,7 @@ extension JSON {
             return false
         }
         var currentMatchedFieldIndex = 0
-        var currentFieldFromRelativePath: SubscriptType = ""
+        var currentFieldFromRelativePath: JSONSubscriptType = ""
         var matches = false
         for var fieldIndex in 0..<absolutePath.count {
             let field = absolutePath[fieldIndex]
@@ -89,38 +89,38 @@ extension JSON {
     /// - parameter relativePath: The target json's relative path.
     /// Wildcard chars for children and descendants are supported in the json path: "." for children values of a json node, "*".
     /// Also, '^' can be used as the prefix the relative path to match the absolute path from beginning (beginning of the line).
-    /// For e.g.: let jsonPath: [SubscriptType] = ["field1", ".", "*", "field2"]
+    /// For e.g.: let jsonPath: [JSONSubscriptType] = ["field1", ".", "*", "field2"]
     /// - parameter currentPath: The absolute json path for getting to @json value
     /// - returns: Returns the absolute paths matching the relative path @relativePath
-    static private func paths(json: JSON, _ relativePath: [SubscriptType], _ currentPath: [SubscriptType]) -> [[SubscriptType]] {
-        var absolutePaths: [[SubscriptType]] = [[SubscriptType]]()
-        if json == JSON.nullJSON {
+    static fileprivate func paths(_ json: JSON, _ relativePath: [JSONSubscriptType], _ currentPath: [JSONSubscriptType]) -> [[JSONSubscriptType]] {
+        var absolutePaths: [[JSONSubscriptType]] = [[JSONSubscriptType]]()
+        if json == JSON.null {
             return absolutePaths
         }
         if matchesRelativePath(relativePath, absolutePath: currentPath) {
             absolutePaths.append(currentPath)
         }
-        let starterSequence: [SubscriptType] = [kStarterWildcard]
-        let fromStart = relativePath.startsWith(starterSequence) { (element, starter) -> Bool in
+        let starterSequence: [JSONSubscriptType] = [kStarterWildcard]
+        let fromStart = relativePath.starts(with: starterSequence) { (element, starter) -> Bool in
             return element == starter
         }
         if fromStart {
             // check if the current path is a good path to go, else return
-            let maxPathCount = max(relativePath.count, currentPath.count)
-            let partialRelativePath = [SubscriptType](relativePath.dropLast(maxPathCount - currentPath.count > 0 ? maxPathCount - currentPath.count - 1 : 0))
+            let maxPathCount = [relativePath.count, currentPath.count].max()!
+            let partialRelativePath = [JSONSubscriptType](relativePath.dropLast(maxPathCount - currentPath.count > 0 ? maxPathCount - currentPath.count - 1 : 0))
             let startsWithCurrentPath =  matchesRelativePath(partialRelativePath, absolutePath: currentPath)
             if !startsWithCurrentPath {
                 return absolutePaths
             }
         }
         switch json.type {
-        case .Dictionary:
+        case .dictionary:
             for (key, value) in json.dictionaryValue {
                 var newCurrentPath = currentPath
                 newCurrentPath.append(key)
                 absolutePaths += paths(value, relativePath, newCurrentPath)
             }
-        case .Array:
+        case .array:
             for index in 0 ..< json.arrayValue.count {
                 let value = json.arrayValue[index]
                 var newCurrentPath = currentPath
@@ -135,14 +135,14 @@ extension JSON {
 
     /// - parameter relativePath: The target json's relative path
     /// - returns: Returns the absolute paths matching the relative path @relativePath in current json
-    public func paths(relativePath relativePath: [SubscriptType]) -> [[SubscriptType]] {
-        let paths: [[SubscriptType]] = JSON.paths(self, relativePath, [SubscriptType]())
+    public func paths(relativePath: [JSONSubscriptType]) -> [[JSONSubscriptType]] {
+        let paths: [[JSONSubscriptType]] = JSON.paths(self, relativePath, [JSONSubscriptType]())
         return paths
     }
 
     /// Get the json values found using the absolute paths @paths
     /// - parameter paths: an array with absolute json paths
-    public func values(paths paths: [[SubscriptType]]) -> [JSON] {
+    public func values(paths: [[JSONSubscriptType]]) -> [JSON] {
         var values = [JSON]()
         for path in paths {
             values.append(self[path])
@@ -152,7 +152,7 @@ extension JSON {
 
     /// Get the json values found using the relative path @relativePath
     /// - parameter relativePath: The target json's relative path
-    public func values(relativePath relativePath: [SubscriptType]) -> [JSON] {
+    public func values(relativePath: [JSONSubscriptType]) -> [JSON] {
         let absolutePaths = paths(relativePath: relativePath)
         return values(paths: absolutePaths)
     }
@@ -160,12 +160,12 @@ extension JSON {
     /// Get the json parents for the values found using the relative path @relativePath
     /// - parameter relativePath: The target json's relative path
     /// - parameter value: the json value from relative path @relativePath
-    public func getParentValuesFor(relativePath relativePath: [SubscriptType], withValue value: JSON) -> [JSON] {
+    public func getParentValuesFor(relativePath: [JSONSubscriptType], withValue value: JSON) -> [JSON] {
         let absolutePaths = paths(relativePath: relativePath)
         let filteredAbsolutePaths = absolutePaths.filter({ (path) -> Bool in
             return self[path] == value
         })
-        let parentAbsolutePaths = filteredAbsolutePaths.map { (path) -> [SubscriptType] in
+        let parentAbsolutePaths = filteredAbsolutePaths.map { (path) -> [JSONSubscriptType] in
             var path = path
             if path.count == 0 {
                 return []
@@ -179,12 +179,12 @@ extension JSON {
     /// Get the json value found using the relative path @relativePath from @index
     /// - parameter index: the index of the json value from the values found with the relative path
     /// - parameter relativePath: the target json's relative path
-    public func getValueFromIndex(index: Int, relativePath: [SubscriptType]) -> JSON {
+    public func getValueFromIndex(_ index: Int, relativePath: [JSONSubscriptType]) -> JSON {
         var jsonValues = values(relativePath: relativePath)
 
         if jsonValues.count == index {
             XCTFail("A value from \(index) index was not found for relative json path \(relativePath) field in json:\n\(self)")
-            return JSON.nullJSON
+            return JSON.null
         }
 
         return jsonValues[index]
@@ -192,7 +192,7 @@ extension JSON {
 
     /// Get the first json value found using the relative path @relativePath
     /// - parameter relativePath: The target json's relative path
-    public func getFirstValue(relativePath relativePath: [SubscriptType]) -> JSON {
+    public func getFirstValue(relativePath: [JSONSubscriptType]) -> JSON {
         return getValueFromIndex(0, relativePath: relativePath)
     }
 
@@ -200,7 +200,7 @@ extension JSON {
     /// - parameter relativePath: The target json's relative path
     /// - parameter newValues: The new values used to update the fields found
     /// - returns: Returns the current json instance
-    public mutating func updateValues(relativePath relativePath: [SubscriptType], newValues: [JSON]) -> JSON {
+    public mutating func updateValues(relativePath: [JSONSubscriptType], newValues: [JSON]) -> JSON {
         let absolutePaths = paths(relativePath: relativePath)
         if absolutePaths.count != newValues.count {
             XCTFail("Found absolute paths count \(absolutePaths.count) doesn't match the new values count \(newValues.count) to set! Please, correct the relative path or update the new values.")
@@ -213,13 +213,13 @@ extension JSON {
     }
 
     /// Convert JSON values @values to an array of type @T? where T is a JSON accepted type: String, Int, Bool, Dictionary, Array
-    public static func optionalValues<T>(values: [JSON]) -> [T?] {
+    public static func optionalValues<T>(_ values: [JSON]) -> [T?] {
         var toValues = [T?]()
         for value in values {
             if let error = value.error {
-                XCTFail("Couldn't convert JSON value \(value) to type \(String(T?)) . Json error: \(error)")
+                XCTFail("Couldn't convert JSON value \(value) to type \(String(describing: T.self)) . Json error: \(error)")
             }
-            if value != JSON.nullJSON {
+            if value != JSON.null {
                 toValues.append(value.object as? T)
             } else {
                 toValues.append(nil)
@@ -229,38 +229,38 @@ extension JSON {
     }
 
     /// Convert JSON values @values to an array of type @T where T is a JSON accepted type: String, Int, Bool, Dictionary, Array
-    public static func values<T>(values: [JSON]) -> [T] {
+    public static func values<T>(_ values: [JSON]) -> [T] {
         var toValues = [T]()
         let optValues: [T?] = optionalValues(values)
         for optionalValue in optValues {
             if let value = optionalValue {
                 toValues.append(value)
             } else {
-                XCTFail("Couldn't convert JSON value \(optionalValue) to type \(String(T)).")
+                XCTFail("Couldn't convert JSON value \(optionalValue) to type \(String(describing: T.self)).")
             }
         }
         return toValues
     }
 }
 
-private func ==(left: SubscriptType, right: SubscriptType) -> Bool {
+private func ==(left: JSONSubscriptType, right: JSONSubscriptType) -> Bool {
     if (left is Int && right is String) || (left is String && right is Int) {
         return false
     }
-    return String(left) == String(right)
+    return String(describing: left) == String(describing: right)
 }
 
-private func !=(left: SubscriptType, right: SubscriptType) -> Bool {
+private func !=(left: JSONSubscriptType, right: JSONSubscriptType) -> Bool {
     return !(left == right)
 }
 
-public func ==(left: [SubscriptType], right: [SubscriptType]) -> Bool {
-    return String(left) == String(right)
+public func ==(left: [JSONSubscriptType], right: [JSONSubscriptType]) -> Bool {
+    return String(describing: left) == String(describing: right)
 }
 
 /// Update the @jsonPath json path with placeholder values @placeholderValues . For e.g:
 ///
-/// let jsonPath: [SubscriptType] = ["test1", "$test2", "test3"]
+/// let jsonPath: [JSONSubscriptType] = ["test1", "$test2", "test3"]
 /// let updatedJsonPath = updateJsonPath(jsonPath, withPlaceholderValues: 1)
 ///
 /// => updatedJsonPath will contain ["test1", 1, "test3"]
@@ -269,7 +269,7 @@ public func ==(left: [SubscriptType], right: [SubscriptType]) -> Bool {
 /// - parameter placeholderPrefix: the prefix string used to identify the placeholders from json path. The default prefix is "$".
 /// - parameter withPlaceholderValues: the SubscriptType values in the right order for replacing the placeholders found in json path.
 /// - returns: the updated json path.
-public func updateJsonPath(jsonPath: [SubscriptType], placeholderPrefix: String = "$", withPlaceholderValues placeholderValues: SubscriptType...) -> [SubscriptType] {
+public func updateJsonPath(_ jsonPath: [JSONSubscriptType], placeholderPrefix: String = "$", withPlaceholderValues placeholderValues: JSONSubscriptType...) -> [JSONSubscriptType] {
     var jsonPath = jsonPath
     let originalJsonPath = jsonPath
     var actualPlaceholdersCount = 0
@@ -281,7 +281,7 @@ public func updateJsonPath(jsonPath: [SubscriptType], placeholderPrefix: String 
                 if placeholderValues.count < actualPlaceholdersCount {
                     XCTFail("There is no placeholder value passed for placeholder \(fieldString)")
                 }
-                jsonPath.replaceRange(i...i, with: [placeholderValues[actualPlaceholdersCount - 1]])
+                jsonPath.replaceSubrange(i...i, with: [placeholderValues[actualPlaceholdersCount - 1]])
             }
         }
     }

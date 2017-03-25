@@ -14,30 +14,30 @@ struct ArgumentOptionsParser {
 
     // parse the arguments and return a dictionary of options values
     func parseArgs() -> [String: String] {
-        let args = Process.arguments
-        let arguments = args.joinWithSeparator(" ")
-        var argsOptionValues = arguments.componentsSeparatedByString(ArgumentOptionsParser.kArgsSeparator)
-        argsOptionValues.removeAtIndex(0)
+        let args = CommandLine.arguments
+        let arguments = args.joined(separator: " ")
+        var argsOptionValues = arguments.components(separatedBy: ArgumentOptionsParser.kArgsSeparator)
+        argsOptionValues.remove(at: 0)
         var parsedOptions = [String: String]()
         for  argsOptionValue in  argsOptionValues {
-            let rangeToRemove = argsOptionValue.rangeOfString(" ")
-            let optionName = argsOptionValue.substringToIndex(rangeToRemove?.startIndex ?? argsOptionValue.endIndex)
+            let rangeToRemove = argsOptionValue.range(of: " ")
+            let optionName = argsOptionValue.substring(to: rangeToRemove?.lowerBound ?? argsOptionValue.endIndex)
             var optionValue = argsOptionValue
-            optionValue.replaceRange(optionValue.startIndex..<(rangeToRemove?.endIndex ?? optionValue.endIndex), with: "")
+            optionValue.replaceSubrange(optionValue.startIndex..<(rangeToRemove?.upperBound ?? optionValue.endIndex), with: "")
             parsedOptions[optionName] = optionValue
         }
         return parsedOptions
     }
 
-    func validateOptionIsNotEmpty(optionName optionName: String, optionValue: String) {
+    func validateOptionIsNotEmpty(optionName: String, optionValue: String) {
         if optionValue.isEmpty {
-            try! CustomErrorType.InvalidArgument(error: "\(ArgumentOptionsParser.kArgsSeparator)\(optionName) option value is empty.").throwsError()
+            try! CustomErrorType.invalidArgument(error: "\(ArgumentOptionsParser.kArgsSeparator)\(optionName) option value is empty.").throwsError()
         }
     }
 
-    func validateOptionExistsAndIsNotEmpty(optionName optionName: String, optionValue: String?) {
+    func validateOptionExistsAndIsNotEmpty(optionName: String, optionValue: String?) {
         guard let optionValue = optionValue else {
-            try! CustomErrorType.InvalidArgument(error: "\(ArgumentOptionsParser.kArgsSeparator)\(optionName) option value was not found.").throwsError()
+            try! CustomErrorType.invalidArgument(error: "\(ArgumentOptionsParser.kArgsSeparator)\(optionName) option value was not found.").throwsError()
             return
         }
         validateOptionIsNotEmpty(optionName: optionName, optionValue: optionValue)
