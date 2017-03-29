@@ -239,7 +239,8 @@ func getJenkinsLastScreenshotsPath(_ lastScreenshotsPath: String, junitPath: Str
 /// Generate JUnit report xml file from TestSummaries plist file from @logsTestPath logs test folder at path @jUnitRepPath
 /// - parameter lastScreenshotsPath: used to compute the Jenkins relative path to build artifacts
 /// - parameter buildUrl: Jenkins build url $BUILD_URL environment variable
-func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?) {
+/// - parameter workspacePath: the workspace path of the repo, to be removed from stacktrace if it is found, to remain just the relative path file
+func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?, workspacePath: String) {
     print("Generate JUnit report xml file from \(logsTestPath) logs test folder to \(jUnitRepPath) file")
 
     // create the needed path for saving the report
@@ -316,6 +317,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                         let rangeToRemove = fileName.range(of: targetName + "/")
                         fileName.replaceSubrange(fileName.startIndex..<(rangeToRemove?.lowerBound ?? fileName.startIndex), with: "")
                         let lineNumber = firstFailureSummaryJson[lineNumberJsonPath].intValue
+                        fileName = fileName.replacingOccurrences(of: workspacePath, with: "")
                         failureStackTrace = fileName + ":" + String(lineNumber)
                     }
                     outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath))
@@ -403,13 +405,15 @@ let screenshotsPathOption = "screenshotsPath"
 let screenshotsCountOption = "screenshotsCount"
 let excludeIdenticalScreenshotsOption = "excludeIdenticalScreenshots"
 let buildUrlOption = "buildUrl"
+let workspacePath = "workspacePath"
 let options: [String: String] = [
     logsTestPathOption: " logs test path",
     jUnitReportPathOption: "JUnit report Path",
     screenshotsPathOption: "last screenshots path",
     screenshotsCountOption: "last screenshots count",
     excludeIdenticalScreenshotsOption: "exclude the consecutive identical screenshots",
-    buildUrlOption: "Jenkins BUILD_URL variable"
+    buildUrlOption: "Jenkins BUILD_URL variable",
+    workspacePath: "The workspace path of the repo"
 ]
 let argumentOptionsParser = ArgumentOptionsParser()
 var parsedOptions = argumentOptionsParser.parseArgs()
@@ -420,6 +424,7 @@ let screenshotsPathOptionValue = parsedOptions[screenshotsPathOption]
 let screenshotsCountOptionValue = parsedOptions[screenshotsCountOption]
 let excludeIdenticalScreenshotsOptionValue = parsedOptions[excludeIdenticalScreenshotsOption]
 let buildUrlOptionValue = parsedOptions[buildUrlOption]
+let workspacePathOptionValue = parsedOptions[workspacePath]
 
 // ====== options validations ======
 argumentOptionsParser.validateOptionExistsAndIsNotEmpty(optionName: logsTestPathOption, optionValue: logsTestPathOptionValue)
@@ -452,5 +457,5 @@ if let screenshotsPathOptionValue = screenshotsPathOptionValue {
 if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: jUnitReportPathOption, optionValue: jUnitReportPathOptionValue)
 
-    generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: jUnitReportPathOptionValue, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue)
+    generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: jUnitReportPathOptionValue, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
 }
