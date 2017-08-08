@@ -187,7 +187,11 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         let testLastScreenShotsPath = lastScreenshotsPath + "/\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
 
         // extract the last screenshotsCount screenshots filenames of the test
-        var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasScreenshotData"], withValue: JSON(true))
+        let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
+        var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasScreenshotData"], lastPathsLimit: lastPathsLimit, withValue: JSON(true))
+        if screenshotsCount != -1 {
+            screenshotNodes = screenshotNodes.reversed()
+        }
         // if screenshotsCount param is -1 then save all screenshots
         let screenshotsCount = screenshotsCount == -1 ? screenshotNodes.count : screenshotsCount
         var screenshotsFiles = [String]()
@@ -196,7 +200,7 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
             prevScreenshotsFile = "Screenshot_" + screenshotNodes[screenshotNodes.count - 1]["UUID"].stringValue + ".png"
             screenshotsFiles.append(prevScreenshotsFile)
         }
-        for index in stride(from: (screenshotNodes.count - 2), to: 0, by: -1) where screenshotsCount > 0 {
+        for index in stride(from: (screenshotNodes.count - 2), to: -1, by: -1) where screenshotsCount > 0 {
             let node = screenshotNodes[index]
             let screenshotsFile = "Screenshot_" + node["UUID"].stringValue + ".png"
             if excludeIdenticalScreenshots {
@@ -320,8 +324,9 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                         fileName = fileName.replacingOccurrences(of: workspacePath, with: "")
                         failureStackTrace = fileName + ":" + String(lineNumber)
                     }
-                    outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath))
-                    let crashSummaries: [JSON] = activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, withValue: JSON(true))
+                    outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
+                    outputLogs = outputLogs.reversed()
+                    let crashSummaries: [JSON] = activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 1, maxArrayCount: 100, withValue: JSON(true))
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
                         let crashSummary = crashSummaries[0]

@@ -92,13 +92,19 @@ extension JSON {
     /// For e.g.: let jsonPath: [JSONSubscriptType] = ["field1", ".", "*", "field2"]
     /// - parameter currentPath: The absolute json path for getting to @json value
     /// - returns: Returns the absolute paths matching the relative path @relativePath
-    static fileprivate func paths(_ json: JSON, _ relativePath: [JSONSubscriptType], _ currentPath: [JSONSubscriptType]) -> [[JSONSubscriptType]] {
+    static fileprivate func paths(_ json: JSON, _ relativePath: [JSONSubscriptType], _ currentPath: [JSONSubscriptType], lastPathsLimit: Int = Int.max, maxArrayCount: Int = Int.max) -> [[JSONSubscriptType]] {
         var absolutePaths: [[JSONSubscriptType]] = [[JSONSubscriptType]]()
         if json == JSON.null {
             return absolutePaths
         }
         if matchesRelativePath(relativePath, absolutePath: currentPath) {
             absolutePaths.append(currentPath)
+            if absolutePaths.count > lastPathsLimit {
+                absolutePaths.removeLast(absolutePaths.count - lastPathsLimit)
+            }
+            if absolutePaths.count == lastPathsLimit {
+                return absolutePaths
+            }
         }
         let starterSequence: [JSONSubscriptType] = [kStarterWildcard]
         let fromStart = relativePath.starts(with: starterSequence) { (element, starter) -> Bool in
@@ -118,14 +124,34 @@ extension JSON {
             for (key, value) in json.dictionaryValue {
                 var newCurrentPath = currentPath
                 newCurrentPath.append(key)
-                absolutePaths += paths(value, relativePath, newCurrentPath)
+                let partialPaths = paths(value, relativePath, newCurrentPath, lastPathsLimit: lastPathsLimit, maxArrayCount: maxArrayCount)
+                absolutePaths += partialPaths
+                if absolutePaths.count > lastPathsLimit {
+                    absolutePaths.removeLast(absolutePaths.count - lastPathsLimit)
+                }
+                if absolutePaths.count == lastPathsLimit {
+                    return absolutePaths
+                }
             }
         case .array:
-            for index in 0 ..< json.arrayValue.count {
+            let firstIndex = json.arrayValue.count > maxArrayCount ? json.arrayValue.count - maxArrayCount : 0
+            let lastIndex = json.arrayValue.count
+            var range = stride(from: firstIndex, to: lastIndex, by: 1)
+            if lastPathsLimit != Int.max {
+                range = stride(from: lastIndex - 1, to: firstIndex - 1, by: -1)
+            }
+            for index in range {
                 let value = json.arrayValue[index]
                 var newCurrentPath = currentPath
                 newCurrentPath.append(index)
-                absolutePaths += paths(value, relativePath, newCurrentPath)
+                let partialPaths = paths(value, relativePath, newCurrentPath, lastPathsLimit: lastPathsLimit, maxArrayCount: maxArrayCount)
+                absolutePaths += partialPaths
+                if absolutePaths.count > lastPathsLimit {
+                    absolutePaths.removeLast(absolutePaths.count - lastPathsLimit)
+                }
+                if absolutePaths.count == lastPathsLimit {
+                    return absolutePaths
+                }
             }
         default:
             break
@@ -135,8 +161,8 @@ extension JSON {
 
     /// - parameter relativePath: The target json's relative path
     /// - returns: Returns the absolute paths matching the relative path @relativePath in current json
-    public func paths(relativePath: [JSONSubscriptType]) -> [[JSONSubscriptType]] {
-        let paths: [[JSONSubscriptType]] = JSON.paths(self, relativePath, [JSONSubscriptType]())
+    public func paths(relativePath: [JSONSubscriptType], lastPathsLimit: Int = Int.max, maxArrayCount: Int = Int.max) -> [[JSONSubscriptType]] {
+        let paths: [[JSONSubscriptType]] = JSON.paths(self, relativePath, [JSONSubscriptType](), lastPathsLimit: lastPathsLimit, maxArrayCount: maxArrayCount)
         return paths
     }
 
@@ -152,16 +178,16 @@ extension JSON {
 
     /// Get the json values found using the relative path @relativePath
     /// - parameter relativePath: The target json's relative path
-    public func values(relativePath: [JSONSubscriptType]) -> [JSON] {
-        let absolutePaths = paths(relativePath: relativePath)
+    public func values(relativePath: [JSONSubscriptType], lastPathsLimit: Int = Int.max, maxArrayCount: Int = Int.max) -> [JSON] {
+        let absolutePaths = paths(relativePath: relativePath, lastPathsLimit: lastPathsLimit, maxArrayCount: maxArrayCount)
         return values(paths: absolutePaths)
     }
 
     /// Get the json parents for the values found using the relative path @relativePath
     /// - parameter relativePath: The target json's relative path
     /// - parameter value: the json value from relative path @relativePath
-    public func getParentValuesFor(relativePath: [JSONSubscriptType], withValue value: JSON) -> [JSON] {
-        let absolutePaths = paths(relativePath: relativePath)
+    public func getParentValuesFor(relativePath: [JSONSubscriptType], lastPathsLimit: Int = Int.max, maxArrayCount: Int = Int.max, withValue value: JSON) -> [JSON] {
+        let absolutePaths = paths(relativePath: relativePath, lastPathsLimit: lastPathsLimit, maxArrayCount: maxArrayCount)
         let filteredAbsolutePaths = absolutePaths.filter({ (path) -> Bool in
             return self[path] == value
         })
