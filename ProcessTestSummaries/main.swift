@@ -163,6 +163,66 @@ private func getTestSummariesPlistJson(logsTestPath: String) -> JSON {
     return JSON(summariesPlistDict)
 }
 
+/**
+ * Encodes "\n" characters between <failure...</failure> with "&#10;", so those won't be replaced with space char when parsing the xml document
+ *
+ * @param xml the xml as String, we need to transform
+ * @return a new xml
+ */
+private func encodeNewLineCharInFailureElement(xml: String, failureTag: String, failureEndTag: String) -> String {
+    var xml = xml
+    var newXml = ""
+    var replace = false
+    let maxNewLinesToReplace = 100 // this is limited to make sure the tool doesn't run out of memory, for e.g. for a large json
+    var replacedNewLinesCount = 0
+    while (!xml.isEmpty) {
+        var newLinePosition = xml.range(of: failureTag)
+        if (newLinePosition == nil) {
+            newXml.append(xml);
+            break;
+        }
+        var newLine = xml.substring(to: newLinePosition!.lowerBound)
+        newXml.append(newLine)
+        xml = xml.substring(from: newLinePosition!.lowerBound)
+        var finishedReplace = false
+        while !finishedReplace {
+            newLinePosition = xml.range(of: "\n")
+            if (newLinePosition == nil) {
+                newXml.append(xml);
+                return newXml
+            }
+            newLine = xml.substring(to: newLinePosition!.lowerBound)
+            if (newLine.range(of: failureEndTag) == nil && replacedNewLinesCount < maxNewLinesToReplace) {
+                if (newLine.range(of: failureTag) != nil) {
+                    newLine.append("&#10;")
+                    replace = true
+                    replacedNewLinesCount = 1
+                } else if (replace) {
+                    newLine.append("&#10;")
+                    replacedNewLinesCount += 1
+                } else {
+                    newLine.append("\n");
+                }
+            } else {
+                replace = false;
+                replacedNewLinesCount = 0;
+                newLine.append("\n");
+                // go to the next failure if we replaced the maximum new lines
+                finishedReplace = true;
+            }
+            newXml.append(newLine);
+            xml = xml.substring(from: xml.characters.index(after: newLinePosition!.lowerBound));
+        }
+    }
+    return newXml;
+}
+
+private func encodeNewLineCharInFailureElements(xml: String) -> String {
+    var newXml = encodeNewLineCharInFailureElement(xml: xml, failureTag: "<failure message=", failureEndTag: "</failure>");
+    newXml = encodeNewLineCharInFailureElement(xml: newXml, failureTag: "<error message=", failureEndTag: "</error>");
+    return newXml;
+}
+
 /// Save the last @screenshotsCount screenshots to @lastScreenshotsPath folder from @logsTestPath test logs for failed tests
 /// if screenshotsCount is -1 then save all screenshots available
 /// - parameter excludeIdenticalScreenshots: excludes the consecutive identical screenshots, to get the relevant screenshots
@@ -395,7 +455,8 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
 
     // finally, save the xml report
     let xmlData = jUnitXml.xmlData(withOptions: Int(XMLNode.Options.nodePrettyPrint.rawValue))
-    if (try? xmlData.write(to: URL(fileURLWithPath: jUnitRepPath), options: [])) == nil {
+    let xmlString = encodeNewLineCharInFailureElements(xml: String.init(data: xmlData, encoding: String.Encoding.utf8) ?? "")
+    if (try? xmlString.write(toFile: jUnitRepPath, atomically: true, encoding: String.Encoding.utf8)) == nil {
         try! CustomErrorType.invalidArgument(error: "Writing xml data to file \(jUnitRepPath) failed!").throwsError()
     }
 }
