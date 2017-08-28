@@ -304,7 +304,7 @@ func getJenkinsLastScreenshotsPath(_ lastScreenshotsPath: String, junitPath: Str
 /// - parameter lastScreenshotsPath: used to compute the Jenkins relative path to build artifacts
 /// - parameter buildUrl: Jenkins build url $BUILD_URL environment variable
 /// - parameter workspacePath: the workspace path of the repo, to be removed from stacktrace if it is found, to remain just the relative path file
-func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?, workspacePath: String) {
+func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, noCrashLogs: Bool, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?, workspacePath: String) {
     print("Generate JUnit report xml file from \(logsTestPath) logs test folder to \(jUnitRepPath) file")
 
     // create the needed path for saving the report
@@ -386,7 +386,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                     }
                     outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
                     outputLogs = outputLogs.reversed()
-                    let crashSummaries: [JSON] = activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 1, maxArrayCount: 100, withValue: JSON(true))
+                    let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 1, maxArrayCount: 100, withValue: JSON(true))
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
                         let crashSummary = crashSummaries[0]
@@ -467,6 +467,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
 // ====== available options ======
 let logsTestPathOption = "logsTestPath"
 let jUnitReportPathOption = "jUnitReportPath"
+let noCrashLogsOption = "noCrashLogs"
 let screenshotsPathOption = "screenshotsPath"
 let screenshotsCountOption = "screenshotsCount"
 let excludeIdenticalScreenshotsOption = "excludeIdenticalScreenshots"
@@ -475,6 +476,7 @@ let workspacePath = "workspacePath"
 let options: [String: String] = [
     logsTestPathOption: " logs test path",
     jUnitReportPathOption: "JUnit report Path",
+    noCrashLogsOption: "Don't save the crash logs",
     screenshotsPathOption: "last screenshots path",
     screenshotsCountOption: "last screenshots count",
     excludeIdenticalScreenshotsOption: "exclude the consecutive identical screenshots",
@@ -486,6 +488,7 @@ var parsedOptions = argumentOptionsParser.parseArgs()
 print("Parsed options: \(parsedOptions)")
 let logsTestPathOptionValue = parsedOptions[logsTestPathOption]
 let jUnitReportPathOptionValue = parsedOptions[jUnitReportPathOption]
+let noCrashLogsOptionValue = parsedOptions[noCrashLogsOption]
 let screenshotsPathOptionValue = parsedOptions[screenshotsPathOption]
 let screenshotsCountOptionValue = parsedOptions[screenshotsCountOption]
 let excludeIdenticalScreenshotsOptionValue = parsedOptions[excludeIdenticalScreenshotsOption]
@@ -499,6 +502,9 @@ argumentOptionsParser.validateOptionExistsAndIsNotEmpty(optionName: logsTestPath
 if jUnitReportPathOptionValue == nil && screenshotsPathOptionValue == nil {
     try! CustomErrorType.invalidArgument(error: "\(ArgumentOptionsParser.kArgsSeparator)\(jUnitReportPathOption) or \(ArgumentOptionsParser.kArgsSeparator)\(screenshotsPathOption) option value doesn't exist.").throwsError()
 }
+
+// don't save the crash logs if --noCrashLogs option is present
+var noCrashLogs = noCrashLogsOptionValue != nil
 
 var screenshotsCount = 5 // the default screenshots count value
 if let screenshotsCountOptionValue = screenshotsCountOptionValue {
@@ -523,5 +529,5 @@ if let screenshotsPathOptionValue = screenshotsPathOptionValue {
 if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: jUnitReportPathOption, optionValue: jUnitReportPathOptionValue)
 
-    generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: jUnitReportPathOptionValue, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
+    generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: jUnitReportPathOptionValue, noCrashLogs: noCrashLogs, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
 }
