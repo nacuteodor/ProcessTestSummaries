@@ -257,12 +257,12 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         var screenshotsFiles = [String]()
         var prevScreenshotsFile = ""
         if screenshotsCount > 0 && screenshotNodes.count > 0 {
-            prevScreenshotsFile = "Screenshot_" + screenshotNodes[screenshotNodes.count - 1]["UUID"].stringValue + ".png"
+            prevScreenshotsFile = "Screenshot_" + screenshotNodes[screenshotNodes.count - 1]["UUID"].stringValue + ".jpg"
             screenshotsFiles.append(prevScreenshotsFile)
         }
         for index in stride(from: (screenshotNodes.count - 2), to: -1, by: -1) where screenshotsCount > 0 {
             let node = screenshotNodes[index]
-            let screenshotsFile = "Screenshot_" + node["UUID"].stringValue + ".png"
+            let screenshotsFile = "Screenshot_" + node["UUID"].stringValue + ".jpg"
             if excludeIdenticalScreenshots {
                 if !fileManager.contentsEqual(atPath: appScreenShotsPath + screenshotsFile, andPath: appScreenShotsPath + prevScreenshotsFile) {
                     screenshotsFiles.append(screenshotsFile)
@@ -281,7 +281,7 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
             screenshotsFiles = screenshotsFiles.reversed()
             for index in 0..<screenshotsFiles.count {
                 let screenshotFile = appScreenShotsPath + screenshotsFiles[index]
-                let newScreenshotFile = testLastScreenShotsPath + "\(index).png"
+                let newScreenshotFile = testLastScreenShotsPath + "\(index).jpg"
                 do {
                     try fileManager.copyItem(atPath: screenshotFile, toPath: newScreenshotFile)
                 } catch let e {
@@ -390,7 +390,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
                         let crashSummary = crashSummaries[0]
-                        let crashFilename = crashSummary[diagnosticReportFileNameJsonPath].stringValue.replacingOccurrences(of: ".crash", with: "") + "_" + crashSummary[uuidJsonPath].stringValue + ".crash"
+                        let crashFilename = crashSummary[diagnosticReportFileNameJsonPath].stringValue
                         let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
                         let savedCrashLogName = testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "") + ".crash.txt"
                         let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
@@ -412,7 +412,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                         let jenkinsScreenshotsLink = "\(testLastScreenShotsLink)\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
                         testLastScreenShotsLinks = "Last Screenshots: \(jenkinsScreenshotsLink)\n \n"
                         for i in (0..<screenshotsCount).reversed()  {
-                            testLastScreenShotsLinks.append(jenkinsScreenshotsLink + "\(i).png\n")
+                            testLastScreenShotsLinks.append(jenkinsScreenshotsLink + "\(i).jpg\n")
                         }
                     }
                     let systemOutNode = XMLElement(name: "system-out", stringValue: testLastScreenShotsLinks + validXMLString(outputLogs.joined(separator: "\n")))
