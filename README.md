@@ -18,7 +18,7 @@ xcodebuild -derivedDataPath $DERIVED_DATA_PATH test
 ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPath $REPORTS_PATH/unitTestResult.xml --screenshotsPath $LAST_SCREENSHOTS_PATH --screenshotsCount 10 --buildUrl $BUILD_URL --excludeIdenticalScreenshots
 
 ## IDE, source code language supported:
-Xcode 8, Swift 3
+Xcode 9, Swift 3
 
 ## Please, give a star to this project if it helps you.
 
