@@ -394,8 +394,15 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                         let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
                         let savedCrashLogName = testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "") + ".crash.txt"
                         let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
-                        createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath)
+                        createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath, emptyPath: false)
                         let crashLogsFile = crashLogsPath + crashFilename
+                        if fileManager.fileExists(atPath: newTestCrashLogFile) {
+                            do {
+                                try fileManager.removeItem(atPath: newTestCrashLogFile)
+                            } catch let e {
+                                try! CustomErrorType.invalidState(error: "Error when removing \(newTestCrashLogFile) file : \(e)").throwsError()
+                            }
+                        }
                         do {
                             try fileManager.copyItem(atPath: crashLogsFile, toPath: newTestCrashLogFile)
                         } catch let e {
