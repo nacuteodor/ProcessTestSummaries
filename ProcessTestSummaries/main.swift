@@ -135,9 +135,9 @@ func validXMLString(_ string: String) -> String {
 
 
 
-private func findTestSummariesPlistFile(logsTestPath: String) -> String {
+private func findTestSummariesPlistFiles(logsTestPath: String) -> [String] {
     let summariesPlistSuffix = "TestSummaries.plist"
-    var summariesPlistFile = ""
+    var summariesPlistFiles = [String]()
     var logsTestFiles = [String]()
     let fileManager = FileManager.default
     if fileManager.fileExists(atPath: logsTestPath) {
@@ -149,18 +149,22 @@ private func findTestSummariesPlistFile(logsTestPath: String) -> String {
     }
     for file in logsTestFiles {
         if file.hasSuffix(summariesPlistSuffix) {
-            summariesPlistFile = logsTestPath + "/" + file
-            break
+            summariesPlistFiles.append(logsTestPath + "/" + file)
         }
     }
-    return summariesPlistFile
+    return summariesPlistFiles
 }
 
-private func getTestSummariesPlistJson(logsTestPath: String) -> JSON {
-    let summariesPlistFile = findTestSummariesPlistFile(logsTestPath: logsTestPath)
+private func getTestSummariesPlistJsons(logsTestPath: String) -> [JSON] {
+    var jsons = [JSON]()
+    let summariesPlistFiles = findTestSummariesPlistFiles(logsTestPath: logsTestPath)
 
-    let summariesPlistDict = (NSDictionary(contentsOfFile: summariesPlistFile) as? Dictionary<String, AnyObject>) ?? Dictionary<String, AnyObject>()
-    return JSON(summariesPlistDict)
+    summariesPlistFiles.forEach { summariesPlistFile in
+        let summariesPlistDict = (NSDictionary(contentsOfFile: summariesPlistFile) as? Dictionary<String, AnyObject>) ?? Dictionary<String, AnyObject>()
+        jsons.append(JSON(summariesPlistDict))
+    }
+
+    return jsons
 }
 
 /**
@@ -468,6 +472,19 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     }
 }
 
+/// Appends a subdirectory to the given string representing a folder filepath. If the provided
+/// subdirectory is an empty string, this simply returns the original path.
+/// - Parameter path: String representing target directory
+/// - Parameter subDirectory: String representing the subdirectory you wish to append to path
+/// - Returns: The new subdirectory path under the original path
+func appendSubdirectoryToPath(_ path: String, subDirectory: String) -> String {
+    if subDirectory.isEmpty {
+        return path
+    }
+
+    return path.last == "/" ? path + subDirectory : path + "/" + subDirectory
+}
+
 
 // ====== main ======
 
@@ -523,7 +540,7 @@ if let screenshotsCountOptionValue = screenshotsCountOptionValue {
 var excludeIdenticalScreenshots = excludeIdenticalScreenshotsOptionValue != nil
 
 let logsTestPath = logsTestPathOptionValue!
-let testSummariesPlistJson = getTestSummariesPlistJson(logsTestPath: logsTestPath)
+let testSummariesPlistJsons = getTestSummariesPlistJsons(logsTestPath: logsTestPath)
 
 // save the last screenshots if --screenshotsPath option is passed
 if let screenshotsPathOptionValue = screenshotsPathOptionValue {
@@ -536,5 +553,13 @@ if let screenshotsPathOptionValue = screenshotsPathOptionValue {
 if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: jUnitReportPathOption, optionValue: jUnitReportPathOptionValue)
 
-    generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: jUnitReportPathOptionValue, noCrashLogs: noCrashLogs, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
+    var fileCount = 1
+    var subDirectory = testSummariesPlistJsons.count > 1 ? "\(fileCount)" : ""
+
+    testSummariesPlistJsons.forEach { testSummariesPlistJson in
+        generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(jUnitReportPathOption, subDirectory: subDirectory) , noCrashLogs: noCrashLogs, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
+        fileCount += 1
+        subDirectory = "\(fileCount)"
+    }
+
 }
