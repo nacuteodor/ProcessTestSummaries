@@ -488,7 +488,11 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
 /// - Parameter path: String representing target directory
 /// - Parameter subDirectory: String representing the subdirectory you wish to append to path
 /// - Returns: The new subdirectory path under the original path
-func appendSubdirectoryToPath(_ path: String, subDirectory: String) -> String {
+func appendSubdirectoryToPath(_ path: String?, subDirectory: String) -> String? {
+    guard let path = path else {
+        return nil
+    }
+
     if subDirectory.isEmpty {
         return path
     }
@@ -572,7 +576,7 @@ if let screenshotsPathOptionValue = screenshotsPathOptionValue {
     var subDirectory = testSummariesPlistJsons.count > 1 ? "\(fileCount)" : ""
 
     testSummariesPlistJsons.forEach { testSummariesPlistJson in
-    saveLastScreenshots(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
+    saveLastScreenshots(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory)!, screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
         fileCount += 1
         subDirectory = "\(fileCount)"
     }
@@ -590,7 +594,7 @@ if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     var subDirectory = testSummariesPlistJsons.count > 1 ? "\(fileCount)" : ""
 
     testSummariesPlistJsons.forEach { testSummariesPlistJson in
-        generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory) + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
+        generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory)! + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
         fileCount += 1
         subDirectory = "\(fileCount)"
     }
