@@ -350,12 +350,22 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     let hasDiagnosticReportDataJsonPath: [JSONSubscriptType] = ["HasDiagnosticReportData"]
     let diagnosticReportFileNameJsonPath: [JSONSubscriptType] = ["DiagnosticReportFileName"]
     let uuidJsonPath: [JSONSubscriptType] = ["UUID"]
+    let deviceNamePath: [JSONSubscriptType] = ["RunDestination", "Target Device", "ModelName"]
+    let deviceOSPath: [JSONSubscriptType] = ["RunDestination", "Target Device", "OperatingSystemVersionWithBuildNumber"]
 
     let testableSummariesJsons = testSummariesPlistJson[testableSummariesJsonPath].arrayValue
+    let testDeviceName = testSummariesPlistJson[deviceNamePath].stringValue
+    let testDeviceOSVersion = testSummariesPlistJson[deviceOSPath].stringValue
+
     var totalTestsCount = 0
     var totalFailuresCount = 0
     for testableSummaryJson in testableSummariesJsons {
-        let targetName = testableSummaryJson[targetNameJsonPath].stringValue
+        // With Xcode 9, the top-level "TestName" in the testable summary is the target name
+        let targetName: String = {
+            let targetName = testableSummaryJson[targetNameJsonPath].stringValue
+            return !targetName.isEmpty ? targetName : testableSummaryJson[testNameJsonPath].stringValue
+        }()
+
         let testSuitesJsons = testableSummaryJson.values(relativePath: testSuitesJsonPath)
 
         for testSuitesJson in testSuitesJsons {
@@ -462,7 +472,8 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
 
     let testSuitesTestsAttr = XMLNode.attribute(withName: "tests", stringValue: String(totalTestsCount))  as! XMLNode
     let testSuitesFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(totalFailuresCount)) as! XMLNode
-    testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr]
+    let testSuitesNameAttr = XMLNode.attribute(withName: "name", stringValue: "\(testDeviceName) \(testDeviceOSVersion)") as! XMLNode
+    testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr, testSuitesNameAttr]
 
     // finally, save the xml report
     let xmlData = jUnitXml.xmlData(withOptions: Int(XMLNode.Options.nodePrettyPrint.rawValue))
@@ -481,8 +492,19 @@ func appendSubdirectoryToPath(_ path: String, subDirectory: String) -> String {
     if subDirectory.isEmpty {
         return path
     }
+    let subDirectory: String = {
+        return subDirectory.last == "/" ? subDirectory : subDirectory + "/"
+    }()
 
     return path.last == "/" ? path + subDirectory : path + "/" + subDirectory
+}
+
+/// Gets the folder from a path to a file. For example, supplying "/Users/name/file.txt" will
+/// return "/Users/name/"
+/// - Parameter path: String representing a path to a file
+/// - Returns: String representing the containing folder for the file
+func getFolderPathFromFilePath(_ path: String) -> String {
+    return path.replacingOccurrences(of: URL(fileURLWithPath: path).lastPathComponent, with: "")
 }
 
 
@@ -546,18 +568,29 @@ let testSummariesPlistJsons = getTestSummariesPlistJsons(logsTestPath: logsTestP
 if let screenshotsPathOptionValue = screenshotsPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: screenshotsPathOption, optionValue: screenshotsPathOptionValue)
 
-    saveLastScreenshots(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
+    var fileCount = 1
+    var subDirectory = testSummariesPlistJsons.count > 1 ? "\(fileCount)" : ""
+
+    testSummariesPlistJsons.forEach { testSummariesPlistJson in
+    saveLastScreenshots(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
+        fileCount += 1
+        subDirectory = "\(fileCount)"
+    }
+
 }
 
 // generate the report if --jUnitReportPath option is passed
 if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: jUnitReportPathOption, optionValue: jUnitReportPathOptionValue)
 
+    let path = getFolderPathFromFilePath(jUnitReportPathOptionValue)
+    let fileName = URL(fileURLWithPath: jUnitReportPathOptionValue).lastPathComponent
+
     var fileCount = 1
     var subDirectory = testSummariesPlistJsons.count > 1 ? "\(fileCount)" : ""
 
     testSummariesPlistJsons.forEach { testSummariesPlistJson in
-        generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(jUnitReportPathOption, subDirectory: subDirectory) , noCrashLogs: noCrashLogs, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
+        generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory) + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: screenshotsPathOptionValue, screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
         fileCount += 1
         subDirectory = "\(fileCount)"
     }
