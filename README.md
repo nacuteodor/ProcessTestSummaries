@@ -11,6 +11,7 @@ This tool is an OS X console application which processes the TestSummaries plist
 - the last screenshots are saved for each test in a separate folder and in the order they were created in test
 - the consecutive identical screenshots can be excluded, to save just the relevant screenshots
 - the generated files can be easily added as artifacts in Jenkins for the tests job
+- supports Xcode 9's parallel testing. Multiple test results are placed in numbered subdirectories and reports are differentiated by device name & iOS version
 
 ## Usage e.g:
 xcodebuild -derivedDataPath $DERIVED_DATA_PATH test
