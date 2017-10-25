@@ -239,6 +239,15 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         try! CustomErrorType.invalidArgument(error: "Last screenshots path is empty.").throwsError()
     }
 
+    let lastScreenshotsPath: String = {
+        if lastScreenshotsPath.characters.last == "/" {
+            return lastScreenshotsPath.substring(to: lastScreenshotsPath.index(before: lastScreenshotsPath.endIndex))
+        }
+        else {
+            return lastScreenshotsPath
+        }
+    }()
+
     let fileManager = FileManager.default
     let appScreenShotsPath = logsTestPath + "/Attachments/"
     let testJsonPath: [JSONSubscriptType] = ["^", "TestableSummaries", ".", "Tests", ".", "Subtests", ".", "Subtests", ".", "Subtests", "."]
