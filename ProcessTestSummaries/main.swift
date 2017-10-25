@@ -365,6 +365,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     let testableSummariesJsons = testSummariesPlistJson[testableSummariesJsonPath].arrayValue
     let testDeviceName = testSummariesPlistJson[deviceNamePath].stringValue
     let testDeviceOSVersion = testSummariesPlistJson[deviceOSPath].stringValue
+    let testDeviceDescription = testDeviceName + " " + testDeviceOSVersion
 
     var totalTestsCount = 0
     var totalFailuresCount = 0
@@ -372,7 +373,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
         // With Xcode 9, the top-level "TestName" in the testable summary is the target name
         let targetName: String = {
             let targetName = testableSummaryJson[targetNameJsonPath].stringValue
-            return !targetName.isEmpty ? targetName : testableSummaryJson[testNameJsonPath].stringValue
+            return !targetName.isEmpty ? testDeviceDescription + " " + targetName : testDeviceDescription + " " + testableSummaryJson[testNameJsonPath].stringValue
         }()
 
         let testSuitesJsons = testableSummaryJson.values(relativePath: testSuitesJsonPath)
@@ -481,7 +482,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
 
     let testSuitesTestsAttr = XMLNode.attribute(withName: "tests", stringValue: String(totalTestsCount))  as! XMLNode
     let testSuitesFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(totalFailuresCount)) as! XMLNode
-    let testSuitesNameAttr = XMLNode.attribute(withName: "name", stringValue: "\(testDeviceName) \(testDeviceOSVersion)") as! XMLNode
+    let testSuitesNameAttr = XMLNode.attribute(withName: "name", stringValue: testDeviceDescription) as! XMLNode
     testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr, testSuitesNameAttr]
 
     // finally, save the xml report
