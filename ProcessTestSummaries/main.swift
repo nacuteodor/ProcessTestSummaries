@@ -359,8 +359,8 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     let hasDiagnosticReportDataJsonPath: [JSONSubscriptType] = ["HasDiagnosticReportData"]
     let diagnosticReportFileNameJsonPath: [JSONSubscriptType] = ["DiagnosticReportFileName"]
     let uuidJsonPath: [JSONSubscriptType] = ["UUID"]
-    let deviceNamePath: [JSONSubscriptType] = ["RunDestination", "Target Device", "ModelName"]
-    let deviceOSPath: [JSONSubscriptType] = ["RunDestination", "Target Device", "OperatingSystemVersionWithBuildNumber"]
+    let deviceNamePath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "ModelName"]
+    let deviceOSPath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "OperatingSystemVersionWithBuildNumber"]
 
     let testableSummariesJsons = testSummariesPlistJson[testableSummariesJsonPath].arrayValue
     let testDeviceName = testSummariesPlistJson[deviceNamePath].stringValue
