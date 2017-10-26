@@ -239,6 +239,15 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         try! CustomErrorType.invalidArgument(error: "Last screenshots path is empty.").throwsError()
     }
 
+    let lastScreenshotsPath: String = {
+        if lastScreenshotsPath.characters.last == "/" {
+            return lastScreenshotsPath.substring(to: lastScreenshotsPath.index(before: lastScreenshotsPath.endIndex))
+        }
+        else {
+            return lastScreenshotsPath
+        }
+    }()
+
     let fileManager = FileManager.default
     let appScreenShotsPath = logsTestPath + "/Attachments/"
     let testJsonPath: [JSONSubscriptType] = ["^", "TestableSummaries", ".", "Tests", ".", "Subtests", ".", "Subtests", ".", "Subtests", "."]
@@ -350,8 +359,8 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     let hasDiagnosticReportDataJsonPath: [JSONSubscriptType] = ["HasDiagnosticReportData"]
     let diagnosticReportFileNameJsonPath: [JSONSubscriptType] = ["DiagnosticReportFileName"]
     let uuidJsonPath: [JSONSubscriptType] = ["UUID"]
-    let deviceNamePath: [JSONSubscriptType] = ["RunDestination", "Target Device", "ModelName"]
-    let deviceOSPath: [JSONSubscriptType] = ["RunDestination", "Target Device", "OperatingSystemVersionWithBuildNumber"]
+    let deviceNamePath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "ModelName"]
+    let deviceOSPath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "OperatingSystemVersionWithBuildNumber"]
 
     let testableSummariesJsons = testSummariesPlistJson[testableSummariesJsonPath].arrayValue
     let testDeviceName = testSummariesPlistJson[deviceNamePath].stringValue
