@@ -415,26 +415,30 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                     let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 1, maxArrayCount: 100, withValue: JSON(true))
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
-                        let crashSummary = crashSummaries[0]
-                        let crashFilename = crashSummary[diagnosticReportFileNameJsonPath].stringValue
-                        let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
-                        let savedCrashLogName = testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "") + ".crash.txt"
-                        let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
-                        createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath, emptyPath: false)
-                        let crashLogsFile = crashLogsPath + crashFilename
-                        if fileManager.fileExists(atPath: newTestCrashLogFile) {
-                            do {
-                                try fileManager.removeItem(atPath: newTestCrashLogFile)
-                            } catch let e {
-                                try! CustomErrorType.invalidState(error: "Error when removing \(newTestCrashLogFile) file : \(e)").throwsError()
+                        for i in 0..<crashSummaries.count {
+                            let crashSummary = crashSummaries[i]
+                            let crashFilename = crashSummary[diagnosticReportFileNameJsonPath].stringValue
+                            let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
+                            var savedCrashLogName = testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
+                            savedCrashLogName = i != 0 ? savedCrashLogName.appending(String(i)): savedCrashLogName
+                            savedCrashLogName += ".crash.txt"
+                            let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
+                            createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath, emptyPath: false)
+                            let crashLogsFile = crashLogsPath + crashFilename
+                            if fileManager.fileExists(atPath: newTestCrashLogFile) {
+                                do {
+                                    try fileManager.removeItem(atPath: newTestCrashLogFile)
+                                } catch let e {
+                                    try! CustomErrorType.invalidState(error: "Error when removing \(newTestCrashLogFile) file : \(e)").throwsError()
+                                }
                             }
+                            do {
+                                try fileManager.copyItem(atPath: crashLogsFile, toPath: newTestCrashLogFile)
+                            } catch let e {
+                                try! CustomErrorType.invalidState(error: "Error when copying \(crashLogsFile) file to \(newTestCrashLogFile) : \(e)").throwsError()
+                            }
+                            print("Saved the crash to path: \(newTestCrashLogFile)")
                         }
-                        do {
-                            try fileManager.copyItem(atPath: crashLogsFile, toPath: newTestCrashLogFile)
-                        } catch let e {
-                            try! CustomErrorType.invalidState(error: "Error when copying \(crashLogsFile) file to \(newTestCrashLogFile) : \(e)").throwsError()
-                        }
-                        print("Saved the crash to path: \(newTestCrashLogFile)")
                     }
 
                     let failureNode = XMLElement(name: "failure", stringValue: failureStackTrace)
