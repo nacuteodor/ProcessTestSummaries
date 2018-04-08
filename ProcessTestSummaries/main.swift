@@ -412,7 +412,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                     }
                     outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
                     outputLogs = outputLogs.reversed()
-                    let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 1, maxArrayCount: 100, withValue: JSON(true))
+                    let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 2, maxArrayCount: 100, withValue: JSON(true))
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
                         for i in 0..<crashSummaries.count {
