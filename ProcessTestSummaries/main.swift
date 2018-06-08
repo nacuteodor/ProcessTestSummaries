@@ -317,7 +317,7 @@ func getJenkinsLastScreenshotsPath(_ lastScreenshotsPath: String, junitPath: Str
 /// - parameter lastScreenshotsPath: used to compute the Jenkins relative path to build artifacts
 /// - parameter buildUrl: Jenkins build url $BUILD_URL environment variable
 /// - parameter workspacePath: the workspace path of the repo, to be removed from stacktrace if it is found, to remain just the relative path file
-func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, noCrashLogs: Bool, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?, workspacePath: String) {
+func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, noCrashLogs: Bool, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?, workspacePath: String, addDevicePrefix: Bool) {
     print("Generate JUnit report xml file from \(logsTestPath) logs test folder to \(jUnitRepPath) file")
 
     // create the needed path for saving the report
@@ -374,8 +374,9 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     for testableSummaryJson in testableSummariesJsons {
         // With Xcode 9, the top-level "TestName" in the testable summary is the target name
         let targetName: String = {
-            let targetName = testableSummaryJson[targetNameJsonPath].stringValue
-            return !targetName.isEmpty ? testDeviceDescription + " " + targetName : testDeviceDescription + " " + testableSummaryJson[testNameJsonPath].stringValue
+            var targetName = testableSummaryJson[targetNameJsonPath].stringValue
+            targetName = !targetName.isEmpty ? testableSummaryJson[targetNameJsonPath].stringValue : testableSummaryJson[testNameJsonPath].stringValue
+            return  addDevicePrefix ? testDeviceDescription + " " + targetName : targetName
         }()
 
         let testSuitesJsons = testableSummaryJson.values(relativePath: testSuitesJsonPath)
@@ -412,7 +413,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                     }
                     outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
                     outputLogs = outputLogs.reversed()
-                    let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 2, maxArrayCount: 100, withValue: JSON(true))
+                    let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 2, maxArrayCount: 400, withValue: JSON(true))
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
                         for i in 0..<crashSummaries.count {
@@ -533,6 +534,7 @@ func getFolderPathFromFilePath(_ path: String) -> String {
 // ====== available options ======
 let logsTestPathOption = "logsTestPath"
 let jUnitReportPathOption = "jUnitReportPath"
+let addDevicePrefixOption = "addDevicePrefixOption"
 let noCrashLogsOption = "noCrashLogs"
 let screenshotsPathOption = "screenshotsPath"
 let screenshotsCountOption = "screenshotsCount"
@@ -540,9 +542,10 @@ let excludeIdenticalScreenshotsOption = "excludeIdenticalScreenshots"
 let buildUrlOption = "buildUrl"
 let workspacePath = "workspacePath"
 let options: [String: String] = [
-    logsTestPathOption: " logs test path",
+    logsTestPathOption: "logs test path",
     jUnitReportPathOption: "JUnit report Path",
-    noCrashLogsOption: "Don't save the crash logs",
+    addDevicePrefixOption: "append the device version to test class name",
+    noCrashLogsOption: "don't save the crash logs",
     screenshotsPathOption: "last screenshots path",
     screenshotsCountOption: "last screenshots count",
     excludeIdenticalScreenshotsOption: "exclude the consecutive identical screenshots",
@@ -554,6 +557,7 @@ var parsedOptions = argumentOptionsParser.parseArgs()
 print("Parsed options: \(parsedOptions)")
 let logsTestPathOptionValue = parsedOptions[logsTestPathOption]
 let jUnitReportPathOptionValue = parsedOptions[jUnitReportPathOption]
+let addDevicePrefixOptionValue = parsedOptions[addDevicePrefixOption]
 let noCrashLogsOptionValue = parsedOptions[noCrashLogsOption]
 let screenshotsPathOptionValue = parsedOptions[screenshotsPathOption]
 let screenshotsCountOptionValue = parsedOptions[screenshotsCountOption]
@@ -602,7 +606,7 @@ if let screenshotsPathOptionValue = screenshotsPathOptionValue {
 // generate the report if --jUnitReportPath option is passed
 if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: jUnitReportPathOption, optionValue: jUnitReportPathOptionValue)
-
+    let addDevicePrefix = addDevicePrefixOptionValue != nil
     let path = getFolderPathFromFilePath(jUnitReportPathOptionValue)
     let fileName = URL(fileURLWithPath: jUnitReportPathOptionValue).lastPathComponent
 
@@ -610,7 +614,7 @@ if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     var subDirectory = testSummariesPlistJsons.count > 1 ? "\(fileCount)" : ""
 
     testSummariesPlistJsons.forEach { testSummariesPlistJson in
-        generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory)! + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "")
+        generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory)! + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "", addDevicePrefix: addDevicePrefix)
         fileCount += 1
         subDirectory = "\(fileCount)"
     }
