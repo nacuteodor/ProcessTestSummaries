@@ -20,6 +20,8 @@ cd Build/Products/Release/
 
 ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPath $REPORTS_PATH/unitTestResult.xml --screenshotsPath $LAST_SCREENSHOTS_PATH --screenshotsCount 10 --buildUrl $BUILD_URL --excludeIdenticalScreenshots
 
+*For the tests run with Xcode 10, use --logsTestPath $DERIVED_DATA_PATH/Logs/Test/\*.xcresult
+
 ## IDE, source code language supported:
 Xcode 9, Swift 3
 
