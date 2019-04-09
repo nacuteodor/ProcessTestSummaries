@@ -6,7 +6,7 @@ This tool is an OS X console application which processes the TestSummaries plist
 - parses the xcodebuild source of truth document to get the tests results in a JUnit report
 - if a test fails with a fatal error, that will still appear in the JUnit report as failure
 - an output log of the UI elements interactions is attached to each failed test in the report
-- links to the last screeshots are logged in the output section of the test report if --buildUrl is passed. --buildUrl needs to be set to $BUILD_URL Jenkins environment variable
+- links to the last screeshots are logged in the output section of the test report if --buildUrl is passed. --buildUrl needs to be set to $BUILD_URL Jenkins environment variable. Make sure $LAST_SCREENSHOTS_PATH folder and $REPORTS_PATH folder are different, but have the same parent folder.
 - the crash log for each failed test will be saved under CrashLogs/ folder under JUnit report path
 - the last screenshots are saved for each test in a separate folder in $LAST_SCREENSHOTS_PATH path and in the order they were created in test
 - the consecutive identical screenshots can be excluded, to save just the relevant screenshots
