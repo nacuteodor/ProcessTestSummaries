@@ -23,7 +23,7 @@ ProcessTestSummaries --logsTestPath $DERIVED_DATA_PATH/Logs/Test --jUnitReportPa
 *For the tests run with Xcode 10, use --logsTestPath $DERIVED_DATA_PATH/Logs/Test/\*.xcresult or --logsTestPath $DERIVED_DATA_PATH/Logs/Test/\*.xcresult/\*_Test
 
 ## IDE, source code language supported:
-Xcode 9, Swift 3
+Xcode 10.2, Swift 5
 
 ## Please, give a star to this project if it helps you.
 
