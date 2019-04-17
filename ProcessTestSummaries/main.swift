@@ -215,7 +215,7 @@ private func encodeNewLineCharInFailureElement(xml: String, failureTag: String, 
                 finishedReplace = true;
             }
             newXml.append(newLine);
-            xml = xml.substring(from: xml.characters.index(after: newLinePosition!.lowerBound));
+            xml = xml.substring(from: xml.index(after: newLinePosition!.lowerBound));
         }
     }
     return newXml;
@@ -240,7 +240,7 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
     }
 
     let lastScreenshotsPath: String = {
-        if lastScreenshotsPath.characters.last == "/" {
+        if lastScreenshotsPath.last == "/" {
             return lastScreenshotsPath.substring(to: lastScreenshotsPath.index(before: lastScreenshotsPath.endIndex))
         }
         else {
@@ -261,7 +261,7 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
 
         // extract the last screenshotsCount screenshots filenames of the test
         let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
-        var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasScreenshotData"], lastPathsLimit: lastPathsLimit, withValue: JSON(true))
+        var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasPayload"], lastPathsLimit: lastPathsLimit, withValue: JSON(true))
         if screenshotsCount != -1 {
             screenshotNodes = screenshotNodes.reversed()
         }
@@ -270,12 +270,12 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         var screenshotsFiles = [String]()
         var prevScreenshotsFile = ""
         if screenshotsCount > 0 && screenshotNodes.count > 0 {
-            prevScreenshotsFile = "Screenshot_" + screenshotNodes[screenshotNodes.count - 1]["UUID"].stringValue + ".jpg"
+            prevScreenshotsFile = screenshotNodes[screenshotNodes.count - 1]["Filename"].stringValue
             screenshotsFiles.append(prevScreenshotsFile)
         }
         for index in stride(from: (screenshotNodes.count - 2), to: -1, by: -1) where screenshotsCount > 0 {
             let node = screenshotNodes[index]
-            let screenshotsFile = "Screenshot_" + node["UUID"].stringValue + ".jpg"
+            let screenshotsFile = node["Filename"].stringValue
             if excludeIdenticalScreenshots {
                 if !fileManager.contentsEqual(atPath: appScreenShotsPath + screenshotsFile, andPath: appScreenShotsPath + prevScreenshotsFile) {
                     screenshotsFiles.append(screenshotsFile)
@@ -358,7 +358,6 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     let lineNumberJsonPath: [JSONSubscriptType] = ["LineNumber"]
     let hasDiagnosticReportDataJsonPath: [JSONSubscriptType] = ["HasDiagnosticReportData"]
     let diagnosticReportFileNameJsonPath: [JSONSubscriptType] = ["DiagnosticReportFileName"]
-    let uuidJsonPath: [JSONSubscriptType] = ["UUID"]
     let deviceNamePath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "Name"]
     let deviceModelNamePath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "ModelName"]
     let deviceOSPath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "OperatingSystemVersionWithBuildNumber"]
@@ -493,7 +492,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr, testSuitesNameAttr]
 
     // finally, save the xml report
-    let xmlData = jUnitXml.xmlData(withOptions: Int(XMLNode.Options.nodePrettyPrint.rawValue))
+    let xmlData = jUnitXml.xmlData(options: XMLNode.Options.nodePrettyPrint)
     let xmlString = encodeNewLineCharInFailureElements(xml: String.init(data: xmlData, encoding: String.Encoding.utf8) ?? "")
     if (try? xmlString.write(toFile: jUnitRepPath, atomically: true, encoding: String.Encoding.utf8)) == nil {
         try! CustomErrorType.invalidArgument(error: "Writing xml data to file \(jUnitRepPath) failed!").throwsError()
