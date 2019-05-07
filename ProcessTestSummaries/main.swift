@@ -70,6 +70,7 @@ func contentsOfDirectoryAtPath(_ path: String) -> [String]? {
     return [String]()
 }
 
+@discardableResult
 func createFolderOrEmptyIfExistsAtPath(_ path: String, emptyPath: Bool = true) -> Bool {
     var containerSetupSuccess = true
     let filenames = contentsOfDirectoryAtPath(path)
@@ -262,6 +263,9 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         // extract the last screenshotsCount screenshots filenames of the test
         let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
         var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasPayload"], lastPathsLimit: lastPathsLimit, withValue: JSON(true))
+        screenshotNodes = screenshotNodes.filter { (screenshotNode) -> Bool in
+            return screenshotNode["UniformTypeIdentifier"].stringValue != "public.data"
+        }
         if screenshotsCount != -1 {
             screenshotNodes = screenshotNodes.reversed()
         }
@@ -356,8 +360,8 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
     let finishTimeIntervalJsonPath: [JSONSubscriptType] = ["FinishTimeInterval"]
     let fileNameJsonPath: [JSONSubscriptType] = ["FileName"]
     let lineNumberJsonPath: [JSONSubscriptType] = ["LineNumber"]
-    let hasDiagnosticReportDataJsonPath: [JSONSubscriptType] = ["HasDiagnosticReportData"]
-    let diagnosticReportFileNameJsonPath: [JSONSubscriptType] = ["DiagnosticReportFileName"]
+    let uniformTypeIdentifierJsonPath: [JSONSubscriptType] = ["UniformTypeIdentifier"]
+    let filenameJsonPath: [JSONSubscriptType] = ["Filename"]
     let deviceNamePath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "Name"]
     let deviceModelNamePath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "ModelName"]
     let deviceOSPath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "OperatingSystemVersionWithBuildNumber"]
@@ -412,12 +416,12 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                     }
                     outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
                     outputLogs = outputLogs.reversed()
-                    let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: hasDiagnosticReportDataJsonPath, lastPathsLimit: 2, maxArrayCount: 400, withValue: JSON(true))
+                    let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: uniformTypeIdentifierJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400, withValue: JSON("public.data"))
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
                         for i in 0..<crashSummaries.count {
                             let crashSummary = crashSummaries[i]
-                            let crashFilename = crashSummary[diagnosticReportFileNameJsonPath].stringValue
+                            let crashFilename = crashSummary[filenameJsonPath].stringValue
                             let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
                             var savedCrashLogName = testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
                             savedCrashLogName = i != 0 ? savedCrashLogName.appending(String(i)): savedCrashLogName
