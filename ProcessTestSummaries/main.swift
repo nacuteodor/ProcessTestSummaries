@@ -264,7 +264,8 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
         var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasPayload"], lastPathsLimit: lastPathsLimit, withValue: JSON(true))
         screenshotNodes = screenshotNodes.filter { (screenshotNode) -> Bool in
-            return screenshotNode["UniformTypeIdentifier"].stringValue != "public.data"
+            let uniformTypeIdentifier = screenshotNode["UniformTypeIdentifier"].stringValue
+            return uniformTypeIdentifier != "public.data" && uniformTypeIdentifier != "public.plain-text"
         }
         if screenshotsCount != -1 {
             screenshotNodes = screenshotNodes.reversed()
