@@ -186,10 +186,11 @@ extension JSON {
     /// Get the json parents for the values found using the relative path @relativePath
     /// - parameter relativePath: The target json's relative path
     /// - parameter value: the json value from relative path @relativePath
-    public func getParentValuesFor(relativePath: [JSONSubscriptType], lastPathsLimit: Int = Int.max, maxArrayCount: Int = Int.max, withValue value: JSON) -> [JSON] {
+    public func getParentValuesFor(relativePath: [JSONSubscriptType], lastPathsLimit: Int = Int.max, maxArrayCount: Int = Int.max, withValue value: JSON, contained: Bool = false) -> [JSON] {
         let absolutePaths = paths(relativePath: relativePath, lastPathsLimit: lastPathsLimit, maxArrayCount: maxArrayCount)
         let filteredAbsolutePaths = absolutePaths.filter({ (path) -> Bool in
-            return self[path] == value
+            let pathValue = self[path]
+            return (!contained && pathValue == value) || (contained && (String(describing: pathValue).contains(String(describing: value)) || String(describing: value).isEmpty))
         })
         let parentAbsolutePaths = filteredAbsolutePaths.map { (path) -> [JSONSubscriptType] in
             var path = path

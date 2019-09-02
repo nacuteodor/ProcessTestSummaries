@@ -1,6 +1,7 @@
 //
 //  main.swift
 //  ProcessTestSummaries
+//  Uses https://github.com/davidahouse/XCResultKit source files to extract the test summaries
 //
 //  Created by Teodor Nacu on 23/05/16.
 //  Copyright © 2016 Teo. All rights reserved.
@@ -134,38 +135,35 @@ func validXMLString(_ string: String) -> String {
     return cleanedString
 }
 
-
-
-private func findTestSummariesPlistFiles(logsTestPath: String) -> [String] {
-    let summariesPlistSuffix = "TestSummaries.plist"
-    var summariesPlistFiles = [String]()
+private func findXcResultFile(logsTestPath: String) -> String {
+    let suffix = ".xcresult"
+    var xcResultFile = ""
     var logsTestFiles = [String]()
     let fileManager = FileManager.default
     if fileManager.fileExists(atPath: logsTestPath) {
-        do {
-            logsTestFiles = try fileManager.contentsOfDirectory(atPath: logsTestPath)
-        } catch let e {
-            try! CustomErrorType.invalidState(error: "Error when getting files from \(logsTestPath) path : \(e)").throwsError()
+        if logsTestPath.hasSuffix(suffix) {
+            return logsTestPath
+        } else {
+            do {
+                logsTestFiles = try fileManager.contentsOfDirectory(atPath: logsTestPath)
+            } catch let e {
+                try! CustomErrorType.invalidState(error: "Error when getting files from \(logsTestPath) path : \(e)").throwsError()
+            }
         }
     }
     for file in logsTestFiles {
-        if file.hasSuffix(summariesPlistSuffix) {
-            summariesPlistFiles.append(logsTestPath + "/" + file)
+        if file.hasSuffix(suffix) {
+            xcResultFile = logsTestPath + "/" + file
+            break
         }
     }
-    return summariesPlistFiles
+    return xcResultFile
 }
 
-private func getTestSummariesPlistJsons(logsTestPath: String) -> [JSON] {
-    var jsons = [JSON]()
-    let summariesPlistFiles = findTestSummariesPlistFiles(logsTestPath: logsTestPath)
+private func getXCResultFileData(logsTestPath: String) -> XCResultFile {
+    let urlToXCResult = findXcResultFile(logsTestPath: logsTestPath)
 
-    summariesPlistFiles.forEach { summariesPlistFile in
-        let summariesPlistDict = (NSDictionary(contentsOfFile: summariesPlistFile) as? Dictionary<String, AnyObject>) ?? Dictionary<String, AnyObject>()
-        jsons.append(JSON(summariesPlistDict))
-    }
-
-    return jsons
+    return XCResultFile(url: URL(fileURLWithPath: urlToXCResult))
 }
 
 /**
@@ -231,7 +229,7 @@ private func encodeNewLineCharInFailureElements(xml: String) -> String {
 /// Save the last @screenshotsCount screenshots to @lastScreenshotsPath folder from @logsTestPath test logs for failed tests
 /// if screenshotsCount is -1 then save all screenshots available
 /// - parameter excludeIdenticalScreenshots: excludes the consecutive identical screenshots, to get the relevant screenshots
-func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, lastScreenshotsPath: String, screenshotsCount: Int, excludeIdenticalScreenshots: Bool = false) {
+func saveLastScreenshots(xcResultFileData: XCResultFile, logsTestPath: String, lastScreenshotsPath: String, screenshotsCount: Int, excludeIdenticalScreenshots: Bool = false) {
     print("Save last \(screenshotsCount) screenshots from \(logsTestPath) logs test folder to \(lastScreenshotsPath) folder")
     if logsTestPath.isEmpty {
         try! CustomErrorType.invalidArgument(error: "Tests logs path is empty.").throwsError()
@@ -248,23 +246,29 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
             return lastScreenshotsPath
         }
     }()
+    let screenshotsPathFromLogs = xcResultFileData.url.path + "/Data/"
 
     let fileManager = FileManager.default
-    let appScreenShotsPath = logsTestPath + "/Attachments/"
-    let testJsonPath: [JSONSubscriptType] = ["^", "TestableSummaries", ".", "Tests", ".", "Subtests", ".", "Subtests", ".", "Subtests", "."]
-    let testStatusJsonPath: [JSONSubscriptType] = testJsonPath + ["TestStatus"]
-    let testIdentifierJsonPath: [JSONSubscriptType] = ["TestIdentifier"]
     // extract the failed test nodes for finding the test screenshots
-    let failedTests = testSummariesPlistJson.getParentValuesFor(relativePath: testStatusJsonPath, withValue: JSON("Failure"))
+    let invocationRecord = xcResultFileData.getInvocationRecord()!
+    let testPlanRunSummariesId = invocationRecord.actions[0].actionResult.testsRef?.id ?? ""
+    let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
+    var failedTests = [ActionTestMetadata]()
+    testPlanRunSummaries?.summaries[0].testableSummaries[0].tests[0].subtestGroups[0].subtestGroups[0].subtests.forEach({ (actionTestMetadata) in
+        if actionTestMetadata.testStatus == "Failure" {
+            failedTests.append(actionTestMetadata)
+        }
+    })
     for failedTestNode in failedTests {
-        let testIdentifier = failedTestNode[testIdentifierJsonPath].stringValue
+        let testIdentifier = failedTestNode.identifier
         let testLastScreenShotsPath = lastScreenshotsPath + "/\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
 
         // extract the last screenshotsCount screenshots filenames of the test
         let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
-        var screenshotNodes = failedTestNode.getParentValuesFor(relativePath: ["HasPayload"], lastPathsLimit: lastPathsLimit, withValue: JSON(true))
+        let actionTestSummary = JSON(string: xcResultFileData.getActionTestSummaryAsJsonString(id: failedTestNode.summaryRef?.id ?? "") ?? "")
+        var screenshotNodes = actionTestSummary.getParentValuesFor(relativePath: ["uniformTypeIdentifier"], lastPathsLimit: lastPathsLimit, withValue: JSON(""), contained: true)
         screenshotNodes = screenshotNodes.filter { (screenshotNode) -> Bool in
-            let uniformTypeIdentifier = screenshotNode["UniformTypeIdentifier"].stringValue
+            let uniformTypeIdentifier = screenshotNode["uniformTypeIdentifier", "_value"].stringValue
             return uniformTypeIdentifier != "public.data" && uniformTypeIdentifier != "public.plain-text"
         }
         if screenshotsCount != -1 {
@@ -275,14 +279,18 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         var screenshotsFiles = [String]()
         var prevScreenshotsFile = ""
         if screenshotsCount > 0 && screenshotNodes.count > 0 {
-            prevScreenshotsFile = screenshotNodes[screenshotNodes.count - 1]["Filename"].stringValue
+            // copy and rename the screenshots to a specific folder for the current test
+            createFolderOrEmptyIfExistsAtPath(testLastScreenShotsPath)
+            prevScreenshotsFile = screenshotNodes[screenshotNodes.count - 1]["filename", "_value"].stringValue
+            try! xcResultFileData.getPayload(id: screenshotNodes[screenshotNodes.count - 1]["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: screenshotsPathFromLogs + prevScreenshotsFile))
             screenshotsFiles.append(prevScreenshotsFile)
         }
         for index in stride(from: (screenshotNodes.count - 2), to: -1, by: -1) where screenshotsCount > 0 {
             let node = screenshotNodes[index]
-            let screenshotsFile = node["Filename"].stringValue
+            let screenshotsFile = node["filename", "_value"].stringValue
+            try! xcResultFileData.getPayload(id: node["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: screenshotsPathFromLogs + screenshotsFile))
             if excludeIdenticalScreenshots {
-                if !fileManager.contentsEqual(atPath: appScreenShotsPath + screenshotsFile, andPath: appScreenShotsPath + prevScreenshotsFile) {
+                if !fileManager.contentsEqual(atPath: screenshotsPathFromLogs + screenshotsFile, andPath: screenshotsPathFromLogs + prevScreenshotsFile) {
                     screenshotsFiles.append(screenshotsFile)
                 }
             } else {
@@ -295,15 +303,14 @@ func saveLastScreenshots(testSummariesPlistJson: JSON, logsTestPath: String, las
         }
         if screenshotsFiles.count > 0 {
             // copy and rename the screenshots to a specific folder for the current test
-            createFolderOrEmptyIfExistsAtPath(testLastScreenShotsPath)
             screenshotsFiles = screenshotsFiles.reversed()
             for index in 0..<screenshotsFiles.count {
-                let screenshotFile = appScreenShotsPath + screenshotsFiles[index]
+                let screenshotFile = screenshotsPathFromLogs + screenshotsFiles[index]
                 let newScreenshotFile = testLastScreenShotsPath + "\(index).jpg"
                 do {
                     try fileManager.copyItem(atPath: screenshotFile, toPath: newScreenshotFile)
                 } catch let e {
-                    try! CustomErrorType.invalidState(error: "Error when copying \(screenshotFile) file to \(newScreenshotFile) : \(e)").throwsError()
+                    try! CustomErrorType.invalidState(error: "Error when removing or copying \(screenshotFile) file to \(newScreenshotFile) : \(e)").throwsError()
                 }
             }
             print("Saved the last \(screenshotsCount) screenshots at path: \(testLastScreenShotsPath) ")
@@ -318,11 +325,11 @@ func getJenkinsLastScreenshotsPath(_ lastScreenshotsPath: String, junitPath: Str
     return lastScreenshotsPath.replacingOccurrences(of: commonPath, with: "")
 }
 
-/// Generate JUnit report xml file from TestSummaries plist file from @logsTestPath logs test folder at path @jUnitRepPath
+/// Generate JUnit report xml file from TestSummaries data from @logsTestPath logs test folder at path @jUnitRepPath
 /// - parameter lastScreenshotsPath: used to compute the Jenkins relative path to build artifacts
 /// - parameter buildUrl: Jenkins build url $BUILD_URL environment variable
 /// - parameter workspacePath: the workspace path of the repo, to be removed from stacktrace if it is found, to remain just the relative path file
-func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUnitRepPath: String, noCrashLogs: Bool, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?, workspacePath: String, addDevicePrefix: Bool) {
+func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, jUnitRepPath: String, noCrashLogs: Bool, lastScreenshotsPath: String? = nil, screenshotsCount: Int, buildUrl: String?, workspacePath: String, addDevicePrefix: Bool) {
     print("Generate JUnit report xml file from \(logsTestPath) logs test folder to \(jUnitRepPath) file")
 
     // create the needed path for saving the report
@@ -340,96 +347,87 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
         testLastScreenShotsLink = "\(buildUrl)artifact/\(screenshotsPath)/"
     }
     let testsCrashLogsPath = jUnitRepParentDir + "/CrashLogs/"
-    let crashLogsPath = logsTestPath + "/Attachments/"
 
-    // parse the TestSummaries plist file and create the JUnit xml document
+    // parse the TestSummaries data and create the JUnit xml document
     let testSuitesNode = XMLElement(name: "testsuites")
     let jUnitXml = XMLDocument(rootElement: testSuitesNode)
 
-    let testableSummariesJsonPath: [JSONSubscriptType] = ["TestableSummaries"]
-    let testSuitesJsonPath: [JSONSubscriptType] = ["^", "Tests", ".", "Subtests", ".", "Subtests", "."]
-    let subtestsJsonPath: [JSONSubscriptType] = ["Subtests"]
-    let targetNameJsonPath: [JSONSubscriptType] = ["TargetName"]
-    let testNameJsonPath: [JSONSubscriptType] = ["TestName"]
-    let testIdentifierJsonPath: [JSONSubscriptType] = ["TestIdentifier"]
-    let testStatusJsonPath: [JSONSubscriptType] = ["TestStatus"]
-    let failureSummariesJsonPath: [JSONSubscriptType] = ["FailureSummaries"]
-    let activitySummariesJsonPath: [JSONSubscriptType] = ["ActivitySummaries"]
-    let titleJsonPath: [JSONSubscriptType] = ["Title"]
-    let messageJsonPath: [JSONSubscriptType] = ["Message"]
-    let startTimeIntervalJsonPath: [JSONSubscriptType] = ["StartTimeInterval"]
-    let finishTimeIntervalJsonPath: [JSONSubscriptType] = ["FinishTimeInterval"]
-    let fileNameJsonPath: [JSONSubscriptType] = ["FileName"]
-    let lineNumberJsonPath: [JSONSubscriptType] = ["LineNumber"]
-    let uniformTypeIdentifierJsonPath: [JSONSubscriptType] = ["UniformTypeIdentifier"]
-    let filenameJsonPath: [JSONSubscriptType] = ["Filename"]
-    let deviceNamePath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "Name"]
-    let deviceModelNamePath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "ModelName"]
-    let deviceOSPath: [JSONSubscriptType] = ["RunDestination", "TargetDevice", "OperatingSystemVersionWithBuildNumber"]
+    let titleJsonPath: [JSONSubscriptType] = ["title", "_value"]
+    let uniformTypeIdentifierJsonPath: [JSONSubscriptType] = ["uniformTypeIdentifier", "_value"]
 
-    let testableSummariesJsons = testSummariesPlistJson[testableSummariesJsonPath].arrayValue
-    let testDeviceModelName = testSummariesPlistJson[deviceModelNamePath].stringValue
-    let testDeviceName = testSummariesPlistJson[deviceNamePath].stringValue
-    let testDeviceOSVersion = testSummariesPlistJson[deviceOSPath].stringValue
+    let invocationRecord = xcResultFileData.getInvocationRecord()!
+    let action = invocationRecord.actions[0]
+    let targetDeviceRecord = action.runDestination.targetDeviceRecord
+
+    let testDeviceModelName = targetDeviceRecord.modelName
+    let testDeviceName = targetDeviceRecord.name
+    let testDeviceOSVersion = targetDeviceRecord.operatingSystemVersionWithBuildNumber
     let testDeviceDescription = "\(testDeviceName) (\(testDeviceModelName) \(testDeviceOSVersion))"
+
+    let testPlanRunSummariesId = action.actionResult.testsRef?.id ?? ""
+    let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
 
     var totalTestsCount = 0
     var totalFailuresCount = 0
-    for testableSummaryJson in testableSummariesJsons {
+    let testPlanRunSummary = testPlanRunSummaries!.summaries[0]
+    for testableSummary in testPlanRunSummary.testableSummaries {
         // With Xcode 9, the top-level "TestName" in the testable summary is the target name
         let targetName: String = {
-            var targetName = testableSummaryJson[targetNameJsonPath].stringValue
-            targetName = !targetName.isEmpty ? testableSummaryJson[targetNameJsonPath].stringValue : testableSummaryJson[testNameJsonPath].stringValue
+            var targetName = testableSummary.targetName ?? ""
+            targetName = !targetName.isEmpty ? targetName : testPlanRunSummary.name
             return  addDevicePrefix ? testDeviceDescription + " " + targetName : targetName
         }()
 
-        let testSuitesJsons = testableSummaryJson.values(relativePath: testSuitesJsonPath)
+        let testSuites = testableSummary.tests[0].subtestGroups[0].subtestGroups
 
-        for testSuitesJson in testSuitesJsons {
+        for testSuite in testSuites {
             let testSuiteNode = XMLElement(name: "testsuite")
 
-            let testSuiteName = targetName + "." + testSuitesJson[testNameJsonPath].stringValue
-            let testCasesJsons = testSuitesJson[subtestsJsonPath].arrayValue
+            let testSuiteName = targetName + "." + testSuite.name
+            let testCases = testSuite.subtests
             var failuresCount = 0
-            for testCaseJson in testCasesJsons {
+            for testCase in testCases {
                 let testCaseNode = XMLElement(name: "testcase")
-                let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
-                let testCaseName = testCaseJson[testNameJsonPath].stringValue.replacingOccurrences(of: "()", with: "")
-                let testCaseStatus =  testCaseJson[testStatusJsonPath].stringValue
+                let testIdentifier = testCase.identifier
+                let testCaseName = testCase.name.replacingOccurrences(of: "()", with: "")
+                let testCaseStatus =  testCase.testStatus
 
-                var time = "0"
-                let activitySummariesJson = testCaseJson[activitySummariesJsonPath]
+                let actionTestSummary = JSON(string: xcResultFileData.getActionTestSummaryAsJsonString(id: testCase.summaryRef?.id ?? "") ?? "")
                 if testCaseStatus != "Success" {
                     failuresCount += 1
                     var outputLogs = [String]()
                     var failureStackTrace = ""
                     var failureMessage = ""
-                    let failureSummariesJson = testCaseJson[failureSummariesJsonPath]
-                    if failureSummariesJson.arrayValue.count > 0 {
-                        let firstFailureSummaryJson = failureSummariesJson[0]
-                        failureMessage = validXMLString(firstFailureSummaryJson[messageJsonPath].stringValue)
-                        var fileName = firstFailureSummaryJson[fileNameJsonPath].stringValue
+                    let testFailureIssueSummaries = action.actionResult.issues.testFailureSummaries.filter({ (testFailureIssueSummary) -> Bool in
+                        return testFailureIssueSummary.testCaseName == testIdentifier.replacingOccurrences(of: "/", with: ".")
+                    })
+                    if testFailureIssueSummaries.count > 0 {
+                        let firstFailureSummary = testFailureIssueSummaries[0]
+                        failureMessage = validXMLString(firstFailureSummary.message)
+                        var fileName = URL(string: firstFailureSummary.documentLocationInCreatingWorkspace?.url ?? "")?.path ?? ""
                         let rangeToRemove = fileName.range(of: targetName + "/")
                         fileName.replaceSubrange(fileName.startIndex..<(rangeToRemove?.lowerBound ?? fileName.startIndex), with: "")
-                        let lineNumber = firstFailureSummaryJson[lineNumberJsonPath].intValue
+                        let tokens = firstFailureSummary.documentLocationInCreatingWorkspace?.url.components(separatedBy: "StartingLineNumber=")
+                        let lineNumber = tokens?.count > 1 ? tokens![1] : "0"
                         fileName = fileName.replacingOccurrences(of: workspacePath, with: "")
-                        failureStackTrace = fileName + ":" + String(lineNumber)
+                        failureStackTrace = fileName + ":" + lineNumber
                     }
-                    outputLogs = JSON.values(activitySummariesJson.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
+                    outputLogs = JSON.values(actionTestSummary.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
                     outputLogs = outputLogs.reversed()
-                    let crashSummaries: [JSON] = noCrashLogs ? [JSON]() : activitySummariesJson.getParentValuesFor(relativePath: uniformTypeIdentifierJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400, withValue: JSON("public.data"))
+                    var crashSummaries: [JSON] = noCrashLogs ? [JSON]() : actionTestSummary.getParentValuesFor(relativePath: uniformTypeIdentifierJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400, withValue: JSON(""), contained: true)
+                    crashSummaries = crashSummaries.filter({ (attachmentNode) -> Bool in
+                        let uniformTypeIdentifier = attachmentNode["uniformTypeIdentifier", "_value"].stringValue
+                        return uniformTypeIdentifier == "public.data"
+                    })
                     // if we have a crash log for the current test, save it
                     if crashSummaries.count > 0 {
                         for i in 0..<crashSummaries.count {
                             let crashSummary = crashSummaries[i]
-                            let crashFilename = crashSummary[filenameJsonPath].stringValue
-                            let testIdentifier = testCaseJson[testIdentifierJsonPath].stringValue
                             var savedCrashLogName = testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
                             savedCrashLogName = i != 0 ? savedCrashLogName.appending(String(i)): savedCrashLogName
                             savedCrashLogName += ".crash.txt"
                             let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
                             createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath, emptyPath: false)
-                            let crashLogsFile = crashLogsPath + crashFilename
                             if fileManager.fileExists(atPath: newTestCrashLogFile) {
                                 do {
                                     try fileManager.removeItem(atPath: newTestCrashLogFile)
@@ -438,9 +436,9 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                                 }
                             }
                             do {
-                                try fileManager.copyItem(atPath: crashLogsFile, toPath: newTestCrashLogFile)
+                                try xcResultFileData.getPayload(id: crashSummary["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: newTestCrashLogFile))
                             } catch let e {
-                                try! CustomErrorType.invalidState(error: "Error when copying \(crashLogsFile) file to \(newTestCrashLogFile) : \(e)").throwsError()
+                                try! CustomErrorType.invalidState(error: "Error when saving crash log with id \(crashSummary["payloadRef", "id", "_value"].stringValue) to \(newTestCrashLogFile) : \(e)").throwsError()
                             }
                             print("Saved the crash to path: \(newTestCrashLogFile)")
                         }
@@ -461,18 +459,7 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                     testCaseNode.addChild(failureNode)
                     testCaseNode.addChild(systemOutNode)
                 }
-                if activitySummariesJson.arrayValue.count > 0 {
-                    let startTime = Double(activitySummariesJson.arrayValue[0][startTimeIntervalJsonPath].stringValue) ?? 0.0
-                    let lastActivitySummaryJson = activitySummariesJson.arrayValue[activitySummariesJson.count - 1]
-                    var finishTimeIntervalJsons = lastActivitySummaryJson.values(relativePath: finishTimeIntervalJsonPath)
-                    var finishTimeIntervalJson = finishTimeIntervalJsons.count > 0 ? finishTimeIntervalJsons[finishTimeIntervalJsons.count - 1] : JSON.null
-                    if finishTimeIntervalJsons.count == 0 {
-                         finishTimeIntervalJsons = lastActivitySummaryJson.values(relativePath: startTimeIntervalJsonPath)
-                        finishTimeIntervalJson = finishTimeIntervalJsons.count > 0 ? finishTimeIntervalJsons[finishTimeIntervalJsons.count - 1] : JSON.null
-                    }
-                    let endTime = Double(finishTimeIntervalJson.stringValue) ?? 0.0
-                    time = String(format: "%.3f", endTime - startTime)
-                }
+                let time = String(format: "%.3f", testCase.duration ?? 0)
 
                 let classnameAttr = XMLNode.attribute(withName: "classname", stringValue: testSuiteName)  as! XMLNode
                 let nameAttr = XMLNode.attribute(withName: "name", stringValue: testCaseName) as! XMLNode
@@ -480,11 +467,11 @@ func generateJUnitReport(testSummariesPlistJson: JSON, logsTestPath: String, jUn
                 testCaseNode.attributes = [classnameAttr, nameAttr, timeAttr]
                 testSuiteNode.addChild(testCaseNode)
             }
-            totalTestsCount += testCasesJsons.count
+            totalTestsCount += testCases.count
             totalFailuresCount += failuresCount
 
             let testSuiteNameAttr = XMLNode.attribute(withName: "name", stringValue: testSuiteName)  as! XMLNode
-            let testSuiteTestsAttr = XMLNode.attribute(withName: "tests", stringValue:  String(testCasesJsons.count)) as! XMLNode
+            let testSuiteTestsAttr = XMLNode.attribute(withName: "tests", stringValue:  String(testCases.count)) as! XMLNode
             let testSuiteFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(failuresCount)) as! XMLNode
             testSuiteNode.attributes = [testSuiteNameAttr, testSuiteTestsAttr, testSuiteFailuresAttr]
             testSuitesNode.addChild(testSuiteNode)
@@ -590,21 +577,13 @@ if let screenshotsCountOptionValue = screenshotsCountOptionValue {
 var excludeIdenticalScreenshots = excludeIdenticalScreenshotsOptionValue != nil
 
 let logsTestPath = logsTestPathOptionValue!
-let testSummariesPlistJsons = getTestSummariesPlistJsons(logsTestPath: logsTestPath)
+let xcResultFileData = getXCResultFileData(logsTestPath: logsTestPath)
 
 // save the last screenshots if --screenshotsPath option is passed
 if let screenshotsPathOptionValue = screenshotsPathOptionValue {
     argumentOptionsParser.validateOptionIsNotEmpty(optionName: screenshotsPathOption, optionValue: screenshotsPathOptionValue)
-
-    var fileCount = 1
-    var subDirectory = testSummariesPlistJsons.count > 1 ? "\(fileCount)" : ""
-
-    testSummariesPlistJsons.forEach { testSummariesPlistJson in
-    saveLastScreenshots(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory)!, screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
-        fileCount += 1
-        subDirectory = "\(fileCount)"
-    }
-
+    let subDirectory = ""
+    saveLastScreenshots(xcResultFileData: xcResultFileData, logsTestPath: logsTestPath, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory)!, screenshotsCount: screenshotsCount, excludeIdenticalScreenshots: excludeIdenticalScreenshots)
 }
 
 // generate the report if --jUnitReportPath option is passed
@@ -614,13 +593,8 @@ if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
     let path = getFolderPathFromFilePath(jUnitReportPathOptionValue)
     let fileName = URL(fileURLWithPath: jUnitReportPathOptionValue).lastPathComponent
 
-    var fileCount = 1
-    var subDirectory = testSummariesPlistJsons.count > 1 ? "\(fileCount)" : ""
+    let subDirectory = ""
 
-    testSummariesPlistJsons.forEach { testSummariesPlistJson in
-        generateJUnitReport(testSummariesPlistJson: testSummariesPlistJson, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory)! + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "", addDevicePrefix: addDevicePrefix)
-        fileCount += 1
-        subDirectory = "\(fileCount)"
-    }
+        generateJUnitReport(xcResultFileData: xcResultFileData, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory)! + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "", addDevicePrefix: addDevicePrefix)
 
 }
