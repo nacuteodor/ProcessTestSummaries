@@ -254,11 +254,18 @@ func saveLastScreenshots(xcResultFileData: XCResultFile, logsTestPath: String, l
     let testPlanRunSummariesId = invocationRecord.actions[0].actionResult.testsRef?.id ?? ""
     let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
     var failedTests = [ActionTestMetadata]()
-    testPlanRunSummaries?.summaries[0].testableSummaries[0].tests[0].subtestGroups[0].subtestGroups[0].subtests.forEach({ (actionTestMetadata) in
-        if actionTestMetadata.testStatus == "Failure" {
-            failedTests.append(actionTestMetadata)
+    let testPlanRunSummary = testPlanRunSummaries!.summaries[0]
+    for testableSummary in testPlanRunSummary.testableSummaries {
+        let testSuites = testableSummary.tests[0].subtestGroups[0].subtestGroups
+        for testSuite in testSuites {
+            let testCases = testSuite.subtests
+            for testCase in testCases {
+                if testCase.testStatus == "Failure" {
+                    failedTests.append(testCase)
+                }
+            }
         }
-    })
+    }
     for failedTestNode in failedTests {
         let testIdentifier = failedTestNode.identifier
         let testLastScreenShotsPath = lastScreenshotsPath + "/\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
