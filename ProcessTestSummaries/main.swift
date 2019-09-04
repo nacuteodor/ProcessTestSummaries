@@ -360,7 +360,7 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
     let jUnitXml = XMLDocument(rootElement: testSuitesNode)
 
     let titleJsonPath: [JSONSubscriptType] = ["title", "_value"]
-    let uniformTypeIdentifierJsonPath: [JSONSubscriptType] = ["uniformTypeIdentifier", "_value"]
+    let uniformTypeIdentifierJsonPath: [JSONSubscriptType] = ["uniformTypeIdentifier"]
 
     let invocationRecord = xcResultFileData.getInvocationRecord()!
     let action = invocationRecord.actions[0]
@@ -423,7 +423,7 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
                     outputLogs = outputLogs.reversed()
                     var crashSummaries: [JSON] = noCrashLogs ? [JSON]() : actionTestSummary.getParentValuesFor(relativePath: uniformTypeIdentifierJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400, withValue: JSON(""), contained: true)
                     crashSummaries = crashSummaries.filter({ (attachmentNode) -> Bool in
-                        let uniformTypeIdentifier = attachmentNode["uniformTypeIdentifier", "_value"].stringValue
+                        let uniformTypeIdentifier = attachmentNode[uniformTypeIdentifierJsonPath + ["_value"]].stringValue
                         return uniformTypeIdentifier == "public.data"
                     })
                     // if we have a crash log for the current test, save it
