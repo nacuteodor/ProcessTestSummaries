@@ -11,25 +11,25 @@ import Foundation
 // FIXME: comparison operators with optionals were removed from the Swift Standard Libary.
 // Consider refactoring the code to use the non-optional operators.
 fileprivate func < <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
-  switch (lhs, rhs) {
-  case let (l?, r?):
-    return l < r
-  case (nil, _?):
-    return true
-  default:
-    return false
-  }
+    switch (lhs, rhs) {
+    case let (l?, r?):
+        return l < r
+    case (nil, _?):
+        return true
+    default:
+        return false
+    }
 }
 
 // FIXME: comparison operators with optionals were removed from the Swift Standard Libary.
 // Consider refactoring the code to use the non-optional operators.
 fileprivate func > <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
-  switch (lhs, rhs) {
-  case let (l?, r?):
-    return l > r
-  default:
-    return rhs < lhs
-  }
+    switch (lhs, rhs) {
+    case let (l?, r?):
+        return l > r
+    default:
+        return rhs < lhs
+    }
 }
 
 
@@ -251,78 +251,82 @@ func saveLastScreenshots(xcResultFileData: XCResultFile, logsTestPath: String, l
     let fileManager = FileManager.default
     // extract the failed test nodes for finding the test screenshots
     let invocationRecord = xcResultFileData.getInvocationRecord()!
-    let testPlanRunSummariesId = invocationRecord.actions[0].actionResult.testsRef?.id ?? ""
-    let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
-    var failedTests = [ActionTestMetadata]()
-    let testPlanRunSummary = testPlanRunSummaries!.summaries[0]
-    for testableSummary in testPlanRunSummary.testableSummaries {
-        let testSuites = testableSummary.tests[0].subtestGroups[0].subtestGroups
-        for testSuite in testSuites {
-            let testCases = testSuite.subtests
-            for testCase in testCases {
-                if testCase.testStatus == "Failure" {
-                    failedTests.append(testCase)
+    let testActionRecords = invocationRecord.actions.filter({ (actionRecord) -> Bool in
+        return actionRecord.schemeTaskName == "Action"
+    })
+    for testActionRecord in testActionRecords {
+        let testPlanRunSummariesId = testActionRecord.actionResult.testsRef?.id ?? ""
+        let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
+        var failedTests = [ActionTestMetadata]()
+        let testPlanRunSummary = testPlanRunSummaries!.summaries[0]
+        for testableSummary in testPlanRunSummary.testableSummaries {
+            let testSuites = testableSummary.tests[0].subtestGroups[0].subtestGroups
+            for testSuite in testSuites {
+                let testCases = testSuite.subtests
+                for testCase in testCases {
+                    if testCase.testStatus == "Failure" {
+                        failedTests.append(testCase)
+                    }
                 }
             }
         }
-    }
-    for failedTestNode in failedTests {
-        let testIdentifier = failedTestNode.identifier
-        let testLastScreenShotsPath = lastScreenshotsPath + "/\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
+        for failedTestNode in failedTests {
+            let testIdentifier = failedTestNode.identifier
+            let testLastScreenShotsPath = lastScreenshotsPath + "/" + (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "(\(testActionRecord.runDestination.displayName))") + "\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
 
-        // extract the last screenshotsCount screenshots filenames of the test
-        let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
-        let actionTestSummary = JSON(string: xcResultFileData.getActionTestSummaryAsJsonString(id: failedTestNode.summaryRef?.id ?? "") ?? "")
-        var screenshotNodes = actionTestSummary.getParentValuesFor(relativePath: ["uniformTypeIdentifier"], lastPathsLimit: lastPathsLimit, withValue: JSON(""), contained: true)
-        screenshotNodes = screenshotNodes.filter { (screenshotNode) -> Bool in
-            let uniformTypeIdentifier = screenshotNode["uniformTypeIdentifier", "_value"].stringValue
-            return uniformTypeIdentifier != "public.data" && uniformTypeIdentifier != "public.plain-text"
-        }
-        if screenshotsCount != -1 {
-            screenshotNodes = screenshotNodes.reversed()
-        }
-        // if screenshotsCount param is -1 then save all screenshots
-        let screenshotsCount = screenshotsCount == -1 ? screenshotNodes.count : screenshotsCount
-        var screenshotsFiles = [String]()
-        var prevScreenshotsFile = ""
-        if screenshotsCount > 0 && screenshotNodes.count > 0 {
-            // copy and rename the screenshots to a specific folder for the current test
-            createFolderOrEmptyIfExistsAtPath(testLastScreenShotsPath)
-            prevScreenshotsFile = screenshotNodes[screenshotNodes.count - 1]["filename", "_value"].stringValue
-            try! xcResultFileData.getPayload(id: screenshotNodes[screenshotNodes.count - 1]["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: screenshotsPathFromLogs + prevScreenshotsFile))
-            screenshotsFiles.append(prevScreenshotsFile)
-        }
-        for index in stride(from: (screenshotNodes.count - 2), to: -1, by: -1) where screenshotsCount > 0 {
-            let node = screenshotNodes[index]
-            let screenshotsFile = node["filename", "_value"].stringValue
-            try! xcResultFileData.getPayload(id: node["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: screenshotsPathFromLogs + screenshotsFile))
-            if excludeIdenticalScreenshots {
-                if !fileManager.contentsEqual(atPath: screenshotsPathFromLogs + screenshotsFile, andPath: screenshotsPathFromLogs + prevScreenshotsFile) {
+            // extract the last screenshotsCount screenshots filenames of the test
+            let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
+            let actionTestSummary = JSON(string: xcResultFileData.getActionTestSummaryAsJsonString(id: failedTestNode.summaryRef?.id ?? "") ?? "")
+            var screenshotNodes = actionTestSummary.getParentValuesFor(relativePath: ["uniformTypeIdentifier"], lastPathsLimit: lastPathsLimit, withValue: JSON(""), contained: true)
+            screenshotNodes = screenshotNodes.filter { (screenshotNode) -> Bool in
+                let uniformTypeIdentifier = screenshotNode["uniformTypeIdentifier", "_value"].stringValue
+                return uniformTypeIdentifier != "public.data" && uniformTypeIdentifier != "public.plain-text"
+            }
+            if screenshotsCount != -1 {
+                screenshotNodes = screenshotNodes.reversed()
+            }
+            // if screenshotsCount param is -1 then save all screenshots
+            let screenshotsCount = screenshotsCount == -1 ? screenshotNodes.count : screenshotsCount
+            var screenshotsFiles = [String]()
+            var prevScreenshotsFile = ""
+            if screenshotsCount > 0 && screenshotNodes.count > 0 {
+                // copy and rename the screenshots to a specific folder for the current test
+                createFolderOrEmptyIfExistsAtPath(testLastScreenShotsPath)
+                prevScreenshotsFile = screenshotNodes[screenshotNodes.count - 1]["filename", "_value"].stringValue
+                try! xcResultFileData.getPayload(id: screenshotNodes[screenshotNodes.count - 1]["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: screenshotsPathFromLogs + prevScreenshotsFile))
+                screenshotsFiles.append(prevScreenshotsFile)
+            }
+            for index in stride(from: (screenshotNodes.count - 2), to: -1, by: -1) where screenshotsCount > 0 {
+                let node = screenshotNodes[index]
+                let screenshotsFile = node["filename", "_value"].stringValue
+                try! xcResultFileData.getPayload(id: node["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: screenshotsPathFromLogs + screenshotsFile))
+                if excludeIdenticalScreenshots {
+                    if !fileManager.contentsEqual(atPath: screenshotsPathFromLogs + screenshotsFile, andPath: screenshotsPathFromLogs + prevScreenshotsFile) {
+                        screenshotsFiles.append(screenshotsFile)
+                    }
+                } else {
                     screenshotsFiles.append(screenshotsFile)
                 }
-            } else {
-                screenshotsFiles.append(screenshotsFile)
-            }
-            if screenshotsFiles.count == screenshotsCount {
-                break
-            }
-            prevScreenshotsFile = screenshotsFile
-        }
-        if screenshotsFiles.count > 0 {
-            // copy and rename the screenshots to a specific folder for the current test
-            screenshotsFiles = screenshotsFiles.reversed()
-            for index in 0..<screenshotsFiles.count {
-                let screenshotFile = screenshotsPathFromLogs + screenshotsFiles[index]
-                let newScreenshotFile = testLastScreenShotsPath + "\(index).jpg"
-                do {
-                    try fileManager.copyItem(atPath: screenshotFile, toPath: newScreenshotFile)
-                } catch let e {
-                    try! CustomErrorType.invalidState(error: "Error when removing or copying \(screenshotFile) file to \(newScreenshotFile) : \(e)").throwsError()
+                if screenshotsFiles.count == screenshotsCount {
+                    break
                 }
+                prevScreenshotsFile = screenshotsFile
             }
-            print("Saved the last \(screenshotsCount) screenshots at path: \(testLastScreenShotsPath) ")
-        }
-    }
+            if screenshotsFiles.count > 0 {
+                // copy and rename the screenshots to a specific folder for the current test
+                screenshotsFiles = screenshotsFiles.reversed()
+                for index in 0..<screenshotsFiles.count {
+                    let screenshotFile = screenshotsPathFromLogs + screenshotsFiles[index]
+                    let newScreenshotFile = testLastScreenShotsPath + "\(index).jpg"
+                    do {
+                        try fileManager.copyItem(atPath: screenshotFile, toPath: newScreenshotFile)
+                    } catch let e {
+                        try! CustomErrorType.invalidState(error: "Error when removing or copying \(screenshotFile) file to \(newScreenshotFile) : \(e)").throwsError()
+                    }
+                }
+                print("Saved the last \(screenshotsCount) screenshots at path: \(testLastScreenShotsPath) ")
+            }
+        }}
 }
 
 /// Get Jenkins build relative last screenshots path
@@ -355,146 +359,153 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
     }
     let testsCrashLogsPath = jUnitRepParentDir + "/CrashLogs/"
 
-    // parse the TestSummaries data and create the JUnit xml document
-    let testSuitesNode = XMLElement(name: "testsuites")
-    let jUnitXml = XMLDocument(rootElement: testSuitesNode)
 
     let titleJsonPath: [JSONSubscriptType] = ["title", "_value"]
     let uniformTypeIdentifierJsonPath: [JSONSubscriptType] = ["uniformTypeIdentifier"]
 
     let invocationRecord = xcResultFileData.getInvocationRecord()!
-    let action = invocationRecord.actions[0]
-    let targetDeviceRecord = action.runDestination.targetDeviceRecord
+    let testActionRecords = invocationRecord.actions.filter({ (actionRecord) -> Bool in
+        return actionRecord.schemeTaskName == "Action"
+    })
+    for action in testActionRecords {
+        let targetDeviceRecord = action.runDestination.targetDeviceRecord
 
-    let testDeviceModelName = targetDeviceRecord.modelName
-    let testDeviceName = targetDeviceRecord.name
-    let testDeviceOSVersion = targetDeviceRecord.operatingSystemVersionWithBuildNumber
-    let testDeviceDescription = "\(testDeviceName) (\(testDeviceModelName) \(testDeviceOSVersion))"
+        // parse the TestSummaries data and create the JUnit xml document
+        let testSuitesNode = XMLElement(name: "testsuites")
+        let jUnitXml = XMLDocument(rootElement: testSuitesNode)
 
-    let testPlanRunSummariesId = action.actionResult.testsRef?.id ?? ""
-    let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
+        let testDeviceModelName = targetDeviceRecord.modelName
+        let testDeviceName = targetDeviceRecord.name
+        let testDeviceOSVersion = targetDeviceRecord.operatingSystemVersionWithBuildNumber
+        let testDeviceDescription = "\(testDeviceName) (\(testDeviceModelName) \(testDeviceOSVersion))"
 
-    var totalTestsCount = 0
-    var totalFailuresCount = 0
-    let testPlanRunSummary = testPlanRunSummaries!.summaries[0]
-    for testableSummary in testPlanRunSummary.testableSummaries {
-        // With Xcode 9, the top-level "TestName" in the testable summary is the target name
-        let targetName: String = {
-            var targetName = testableSummary.targetName ?? ""
-            targetName = !targetName.isEmpty ? targetName : testPlanRunSummary.name
-            return  addDevicePrefix ? testDeviceDescription + " " + targetName : targetName
-        }()
+        let testPlanRunSummariesId = action.actionResult.testsRef?.id ?? ""
+        let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
 
-        let testSuites = testableSummary.tests[0].subtestGroups[0].subtestGroups
+        var totalTestsCount = 0
+        var totalFailuresCount = 0
+        let testPlanRunSummary = testPlanRunSummaries!.summaries[0]
+        for testableSummary in testPlanRunSummary.testableSummaries {
+            // With Xcode 9, the top-level "TestName" in the testable summary is the target name
+            let targetName: String = {
+                var targetName = testableSummary.targetName ?? ""
+                targetName = !targetName.isEmpty ? targetName : testPlanRunSummary.name
+                return  addDevicePrefix ? testDeviceDescription + " " + targetName : targetName
+            }()
 
-        for testSuite in testSuites {
-            let testSuiteNode = XMLElement(name: "testsuite")
+            let testSuites = testableSummary.tests[0].subtestGroups[0].subtestGroups
 
-            let testSuiteName = targetName + "." + testSuite.name
-            let testCases = testSuite.subtests
-            var failuresCount = 0
-            for testCase in testCases {
-                let testCaseNode = XMLElement(name: "testcase")
-                let testIdentifier = testCase.identifier
-                let testCaseName = testCase.name.replacingOccurrences(of: "()", with: "")
-                let testCaseStatus =  testCase.testStatus
+            for testSuite in testSuites {
+                let testSuiteNode = XMLElement(name: "testsuite")
 
-                let actionTestSummary = JSON(string: xcResultFileData.getActionTestSummaryAsJsonString(id: testCase.summaryRef?.id ?? "") ?? "")
-                if testCaseStatus != "Success" {
-                    failuresCount += 1
-                    var outputLogs = [String]()
-                    var failureStackTrace = ""
-                    var failureMessage = ""
-                    let testFailureIssueSummaries = action.actionResult.issues.testFailureSummaries.filter({ (testFailureIssueSummary) -> Bool in
-                        return testFailureIssueSummary.testCaseName == testIdentifier.replacingOccurrences(of: "/", with: ".")
-                    })
-                    if testFailureIssueSummaries.count > 0 {
-                        let firstFailureSummary = testFailureIssueSummaries[0]
-                        failureMessage = validXMLString(firstFailureSummary.message)
-                        var fileName = URL(string: firstFailureSummary.documentLocationInCreatingWorkspace?.url ?? "")?.path ?? ""
-                        let rangeToRemove = fileName.range(of: targetName + "/")
-                        fileName.replaceSubrange(fileName.startIndex..<(rangeToRemove?.lowerBound ?? fileName.startIndex), with: "")
-                        let tokens = firstFailureSummary.documentLocationInCreatingWorkspace?.url.components(separatedBy: "StartingLineNumber=")
-                        let lineNumber = tokens?.count > 1 ? tokens![1] : "0"
-                        fileName = fileName.replacingOccurrences(of: workspacePath, with: "")
-                        failureStackTrace = fileName + ":" + lineNumber
-                    }
-                    outputLogs = JSON.values(actionTestSummary.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
-                    outputLogs = outputLogs.reversed()
-                    var crashSummaries: [JSON] = noCrashLogs ? [JSON]() : actionTestSummary.getParentValuesFor(relativePath: uniformTypeIdentifierJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400, withValue: JSON(""), contained: true)
-                    crashSummaries = crashSummaries.filter({ (attachmentNode) -> Bool in
-                        let uniformTypeIdentifier = attachmentNode[uniformTypeIdentifierJsonPath + ["_value"]].stringValue
-                        return uniformTypeIdentifier == "public.data"
-                    })
-                    // if we have a crash log for the current test, save it
-                    if crashSummaries.count > 0 {
-                        for i in 0..<crashSummaries.count {
-                            let crashSummary = crashSummaries[i]
-                            var savedCrashLogName = testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
-                            savedCrashLogName = i != 0 ? savedCrashLogName.appending(String(i)): savedCrashLogName
-                            savedCrashLogName += ".crash.txt"
-                            let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
-                            createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath, emptyPath: false)
-                            if fileManager.fileExists(atPath: newTestCrashLogFile) {
-                                do {
-                                    try fileManager.removeItem(atPath: newTestCrashLogFile)
-                                } catch let e {
-                                    try! CustomErrorType.invalidState(error: "Error when removing \(newTestCrashLogFile) file : \(e)").throwsError()
+                let testSuiteName = targetName + "." + testSuite.name
+                let testCases = testSuite.subtests
+                var failuresCount = 0
+                for testCase in testCases {
+                    let testCaseNode = XMLElement(name: "testcase")
+                    let testIdentifier = testCase.identifier
+                    let testCaseName = testCase.name.replacingOccurrences(of: "()", with: "")
+                    let testCaseStatus =  testCase.testStatus
+
+                    let actionTestSummary = JSON(string: xcResultFileData.getActionTestSummaryAsJsonString(id: testCase.summaryRef?.id ?? "") ?? "")
+                    if testCaseStatus != "Success" {
+                        failuresCount += 1
+                        var outputLogs = [String]()
+                        var failureStackTrace = ""
+                        var failureMessage = ""
+                        let testFailureIssueSummaries = action.actionResult.issues.testFailureSummaries.filter({ (testFailureIssueSummary) -> Bool in
+                            return testFailureIssueSummary.testCaseName == testIdentifier.replacingOccurrences(of: "/", with: ".")
+                        })
+                        if testFailureIssueSummaries.count > 0 {
+                            let firstFailureSummary = testFailureIssueSummaries[0]
+                            failureMessage = validXMLString(firstFailureSummary.message)
+                            var fileName = URL(string: firstFailureSummary.documentLocationInCreatingWorkspace?.url ?? "")?.path ?? ""
+                            let rangeToRemove = fileName.range(of: targetName + "/")
+                            fileName.replaceSubrange(fileName.startIndex..<(rangeToRemove?.lowerBound ?? fileName.startIndex), with: "")
+                            let tokens = firstFailureSummary.documentLocationInCreatingWorkspace?.url.components(separatedBy: "StartingLineNumber=")
+                            let lineNumber = tokens?.count > 1 ? tokens![1] : "0"
+                            fileName = fileName.replacingOccurrences(of: workspacePath, with: "")
+                            failureStackTrace = fileName + ":" + lineNumber
+                        }
+                        outputLogs = JSON.values(actionTestSummary.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
+                        outputLogs = outputLogs.reversed()
+                        var crashSummaries: [JSON] = noCrashLogs ? [JSON]() : actionTestSummary.getParentValuesFor(relativePath: uniformTypeIdentifierJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400, withValue: JSON(""), contained: true)
+                        crashSummaries = crashSummaries.filter({ (attachmentNode) -> Bool in
+                            let uniformTypeIdentifier = attachmentNode[uniformTypeIdentifierJsonPath + ["_value"]].stringValue
+                            return uniformTypeIdentifier == "public.data"
+                        })
+                        // if we have a crash log for the current test, save it
+                        if crashSummaries.count > 0 {
+                            for i in 0..<crashSummaries.count {
+                                let crashSummary = crashSummaries[i]
+                                var savedCrashLogName = (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "(\(action.runDestination.displayName))") + testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
+                                savedCrashLogName = i != 0 ? savedCrashLogName.appending(String(i)): savedCrashLogName
+                                savedCrashLogName += ".crash.txt"
+                                let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
+                                createFolderOrEmptyIfExistsAtPath(testsCrashLogsPath, emptyPath: false)
+                                if fileManager.fileExists(atPath: newTestCrashLogFile) {
+                                    do {
+                                        try fileManager.removeItem(atPath: newTestCrashLogFile)
+                                    } catch let e {
+                                        try! CustomErrorType.invalidState(error: "Error when removing \(newTestCrashLogFile) file : \(e)").throwsError()
+                                    }
                                 }
+                                do {
+                                    try xcResultFileData.getPayload(id: crashSummary["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: newTestCrashLogFile))
+                                } catch let e {
+                                    try! CustomErrorType.invalidState(error: "Error when saving crash log with id \(crashSummary["payloadRef", "id", "_value"].stringValue) to \(newTestCrashLogFile) : \(e)").throwsError()
+                                }
+                                print("Saved the crash to path: \(newTestCrashLogFile)")
                             }
-                            do {
-                                try xcResultFileData.getPayload(id: crashSummary["payloadRef", "id", "_value"].stringValue)?.write(to: URL(fileURLWithPath: newTestCrashLogFile))
-                            } catch let e {
-                                try! CustomErrorType.invalidState(error: "Error when saving crash log with id \(crashSummary["payloadRef", "id", "_value"].stringValue) to \(newTestCrashLogFile) : \(e)").throwsError()
-                            }
-                            print("Saved the crash to path: \(newTestCrashLogFile)")
                         }
-                    }
 
-                    let failureNode = XMLElement(name: "failure", stringValue: failureStackTrace)
-                    let messageAttr = XMLNode.attribute(withName: "message", stringValue: failureMessage)  as! XMLNode
-                    failureNode.attributes = [messageAttr]
-                    var testLastScreenShotsLinks: String = ""
-                    if !testLastScreenShotsLink.isEmpty {
-                        let jenkinsScreenshotsLink = "\(testLastScreenShotsLink)\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
-                        testLastScreenShotsLinks = "Last Screenshots: \(jenkinsScreenshotsLink)\n \n"
-                        for i in (0..<screenshotsCount).reversed()  {
-                            testLastScreenShotsLinks.append(jenkinsScreenshotsLink + "\(i).jpg\n")
+                        let failureNode = XMLElement(name: "failure", stringValue: failureStackTrace)
+                        let messageAttr = XMLNode.attribute(withName: "message", stringValue: failureMessage)  as! XMLNode
+                        failureNode.attributes = [messageAttr]
+                        var testLastScreenShotsLinks: String = ""
+                        if !testLastScreenShotsLink.isEmpty {
+                            let jenkinsScreenshotsLink = testLastScreenShotsLink + (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "(\(action.runDestination.displayName))") + "\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
+                            testLastScreenShotsLinks = "Last Screenshots: \(jenkinsScreenshotsLink)\n \n"
+                            for i in (0..<screenshotsCount).reversed()  {
+                                testLastScreenShotsLinks.append(jenkinsScreenshotsLink + "\(i).jpg\n")
+                            }
                         }
+                        let systemOutNode = XMLElement(name: "system-out", stringValue: testLastScreenShotsLinks + validXMLString(outputLogs.joined(separator: "\n")))
+                        testCaseNode.addChild(failureNode)
+                        testCaseNode.addChild(systemOutNode)
                     }
-                    let systemOutNode = XMLElement(name: "system-out", stringValue: testLastScreenShotsLinks + validXMLString(outputLogs.joined(separator: "\n")))
-                    testCaseNode.addChild(failureNode)
-                    testCaseNode.addChild(systemOutNode)
+                    let time = String(format: "%.3f", testCase.duration ?? 0)
+
+                    let classnameAttr = XMLNode.attribute(withName: "classname", stringValue: testSuiteName)  as! XMLNode
+                    let nameAttr = XMLNode.attribute(withName: "name", stringValue: testCaseName) as! XMLNode
+                    let timeAttr = XMLNode.attribute(withName: "time", stringValue: time) as! XMLNode
+                    testCaseNode.attributes = [classnameAttr, nameAttr, timeAttr]
+                    testSuiteNode.addChild(testCaseNode)
                 }
-                let time = String(format: "%.3f", testCase.duration ?? 0)
+                totalTestsCount += testCases.count
+                totalFailuresCount += failuresCount
 
-                let classnameAttr = XMLNode.attribute(withName: "classname", stringValue: testSuiteName)  as! XMLNode
-                let nameAttr = XMLNode.attribute(withName: "name", stringValue: testCaseName) as! XMLNode
-                let timeAttr = XMLNode.attribute(withName: "time", stringValue: time) as! XMLNode
-                testCaseNode.attributes = [classnameAttr, nameAttr, timeAttr]
-                testSuiteNode.addChild(testCaseNode)
+                let testSuiteNameAttr = XMLNode.attribute(withName: "name", stringValue: testSuiteName)  as! XMLNode
+                let testSuiteTestsAttr = XMLNode.attribute(withName: "tests", stringValue:  String(testCases.count)) as! XMLNode
+                let testSuiteFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(failuresCount)) as! XMLNode
+                testSuiteNode.attributes = [testSuiteNameAttr, testSuiteTestsAttr, testSuiteFailuresAttr]
+                testSuitesNode.addChild(testSuiteNode)
             }
-            totalTestsCount += testCases.count
-            totalFailuresCount += failuresCount
-
-            let testSuiteNameAttr = XMLNode.attribute(withName: "name", stringValue: testSuiteName)  as! XMLNode
-            let testSuiteTestsAttr = XMLNode.attribute(withName: "tests", stringValue:  String(testCases.count)) as! XMLNode
-            let testSuiteFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(failuresCount)) as! XMLNode
-            testSuiteNode.attributes = [testSuiteNameAttr, testSuiteTestsAttr, testSuiteFailuresAttr]
-            testSuitesNode.addChild(testSuiteNode)
         }
-    }
 
-    let testSuitesTestsAttr = XMLNode.attribute(withName: "tests", stringValue: String(totalTestsCount))  as! XMLNode
-    let testSuitesFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(totalFailuresCount)) as! XMLNode
-    let testSuitesNameAttr = XMLNode.attribute(withName: "name", stringValue: testDeviceDescription) as! XMLNode
-    testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr, testSuitesNameAttr]
+        let testSuitesTestsAttr = XMLNode.attribute(withName: "tests", stringValue: String(totalTestsCount))  as! XMLNode
+        let testSuitesFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(totalFailuresCount)) as! XMLNode
+        let testSuitesNameAttr = XMLNode.attribute(withName: "name", stringValue: testDeviceDescription) as! XMLNode
+        testSuitesNode.attributes = [testSuitesTestsAttr, testSuitesFailuresAttr, testSuitesNameAttr]
 
-    // finally, save the xml report
-    let xmlData = jUnitXml.xmlData(options: XMLNode.Options.nodePrettyPrint)
-    let xmlString = encodeNewLineCharInFailureElements(xml: String.init(data: xmlData, encoding: String.Encoding.utf8) ?? "")
-    if (try? xmlString.write(toFile: jUnitRepPath, atomically: true, encoding: String.Encoding.utf8)) == nil {
-        try! CustomErrorType.invalidArgument(error: "Writing xml data to file \(jUnitRepPath) failed!").throwsError()
+        // finally, save the xml report
+        let xmlData = jUnitXml.xmlData(options: XMLNode.Options.nodePrettyPrint)
+        let xmlString = encodeNewLineCharInFailureElements(xml: String.init(data: xmlData, encoding: String.Encoding.utf8) ?? "")
+        let path = getFolderPathFromFilePath(jUnitRepPath)
+        let fileName = (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "(\(action.runDestination.displayName))") + URL(fileURLWithPath: jUnitRepPath).lastPathComponent
+        if (try? xmlString.write(toFile: path + fileName, atomically: true, encoding: String.Encoding.utf8)) == nil {
+            try! CustomErrorType.invalidArgument(error: "Writing xml data to file \(jUnitRepPath) failed!").throwsError()
+        }
     }
 }
 
@@ -602,6 +613,6 @@ if let jUnitReportPathOptionValue = jUnitReportPathOptionValue {
 
     let subDirectory = ""
 
-        generateJUnitReport(xcResultFileData: xcResultFileData, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory)! + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "", addDevicePrefix: addDevicePrefix)
+    generateJUnitReport(xcResultFileData: xcResultFileData, logsTestPath: logsTestPath, jUnitRepPath: appendSubdirectoryToPath(path, subDirectory: subDirectory)! + fileName, noCrashLogs: noCrashLogs, lastScreenshotsPath: appendSubdirectoryToPath(screenshotsPathOptionValue, subDirectory: subDirectory), screenshotsCount: screenshotsCount, buildUrl: buildUrlOptionValue, workspacePath: workspacePathOptionValue ?? "", addDevicePrefix: addDevicePrefix)
 
 }
