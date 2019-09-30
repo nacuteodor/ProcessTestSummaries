@@ -260,6 +260,9 @@ func saveLastScreenshots(xcResultFileData: XCResultFile, logsTestPath: String, l
         var failedTests = [ActionTestMetadata]()
         let testPlanRunSummary = testPlanRunSummaries!.summaries[0]
         for testableSummary in testPlanRunSummary.testableSummaries {
+            if  testableSummary.tests.isEmpty {
+                continue
+            }
             let testSuites = testableSummary.tests[0].subtestGroups[0].subtestGroups
             for testSuite in testSuites {
                 let testCases = testSuite.subtests
@@ -272,7 +275,7 @@ func saveLastScreenshots(xcResultFileData: XCResultFile, logsTestPath: String, l
         }
         for failedTestNode in failedTests {
             let testIdentifier = failedTestNode.identifier
-            let testLastScreenShotsPath = lastScreenshotsPath + "/" + (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "(\(testActionRecord.runDestination.displayName))") + "\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
+            let testLastScreenShotsPath = lastScreenshotsPath + "/" + (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "\(testActionRecord.runDestination.displayName)_") + "\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
 
             // extract the last screenshotsCount screenshots filenames of the test
             let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
@@ -390,9 +393,35 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
             let targetName: String = {
                 var targetName = testableSummary.targetName ?? ""
                 targetName = !targetName.isEmpty ? targetName : testPlanRunSummary.name
-                return  addDevicePrefix ? testDeviceDescription + " " + targetName : targetName
+                return addDevicePrefix ? testDeviceDescription + " " + targetName : targetName
             }()
 
+            if  testableSummary.tests.isEmpty {
+                // in case there is no test run found but there is an error, report the error
+                if !action.actionResult.issues.errorSummaries.isEmpty {
+                    let testSuiteNode = XMLElement(name: "testsuite")
+                    let testCaseNode = XMLElement(name: "testcase")
+                    let failureNode = XMLElement(name: "failure", stringValue: "")
+                    let messageAttr = XMLNode.attribute(withName: "message", stringValue: action.actionResult.issues.errorSummaries[0].message)  as! XMLNode
+                    failureNode.attributes = [messageAttr]
+                    testCaseNode.addChild(failureNode)
+                    let classnameAttr = XMLNode.attribute(withName: "classname", stringValue: targetName + ".null")  as! XMLNode
+                    let nameAttr = XMLNode.attribute(withName: "name", stringValue: "null") as! XMLNode
+                    let timeAttr = XMLNode.attribute(withName: "time", stringValue: String(describing: action.endedTime.timeIntervalSince(action.startedTime))) as! XMLNode
+                    testCaseNode.attributes = [classnameAttr, nameAttr, timeAttr]
+                    testSuiteNode.addChild(testCaseNode)
+
+                    let testSuiteNameAttr = XMLNode.attribute(withName: "name", stringValue: targetName + ".null")  as! XMLNode
+                    let testSuiteTestsAttr = XMLNode.attribute(withName: "tests", stringValue:  String(1)) as! XMLNode
+                    let testSuiteFailuresAttr = XMLNode.attribute(withName: "failures", stringValue: String(1)) as! XMLNode
+                    testSuiteNode.attributes = [testSuiteNameAttr, testSuiteTestsAttr, testSuiteFailuresAttr]
+                    testSuitesNode.addChild(testSuiteNode)
+
+                    totalTestsCount += 1
+                    totalFailuresCount += 1
+                }
+                continue
+            }
             let testSuites = testableSummary.tests[0].subtestGroups[0].subtestGroups
 
             for testSuite in testSuites {
@@ -438,7 +467,7 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
                         if crashSummaries.count > 0 {
                             for i in 0..<crashSummaries.count {
                                 let crashSummary = crashSummaries[i]
-                                var savedCrashLogName = (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "(\(action.runDestination.displayName))") + testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
+                                var savedCrashLogName = (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "\(action.runDestination.displayName)_") + testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
                                 savedCrashLogName = i != 0 ? savedCrashLogName.appending(String(i)): savedCrashLogName
                                 savedCrashLogName += ".crash.txt"
                                 let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
@@ -464,7 +493,7 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
                         failureNode.attributes = [messageAttr]
                         var testLastScreenShotsLinks: String = ""
                         if !testLastScreenShotsLink.isEmpty {
-                            let jenkinsScreenshotsLink = testLastScreenShotsLink + (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "(\(action.runDestination.displayName))") + "\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
+                            let jenkinsScreenshotsLink = testLastScreenShotsLink + (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "\(action.runDestination.displayName)_") + "\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
                             testLastScreenShotsLinks = "Last Screenshots: \(jenkinsScreenshotsLink)\n \n"
                             for i in (0..<screenshotsCount).reversed()  {
                                 testLastScreenShotsLinks.append(jenkinsScreenshotsLink + "\(i).jpg\n")
