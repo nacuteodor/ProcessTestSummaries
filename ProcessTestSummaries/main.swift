@@ -252,13 +252,13 @@ func saveLastScreenshots(xcResultFileData: XCResultFile, logsTestPath: String, l
     // extract the failed test nodes for finding the test screenshots
     let invocationRecord = xcResultFileData.getInvocationRecord()!
     let testActionRecords = invocationRecord.actions.filter({ (actionRecord) -> Bool in
-        return actionRecord.schemeTaskName == "Action"
+        return actionRecord.schemeTaskName == "Action" || actionRecord.schemeTaskName == "BuildAndAction"
     })
     for testActionRecord in testActionRecords {
         let testPlanRunSummariesId = testActionRecord.actionResult.testsRef?.id ?? ""
-        let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
+        let actionTestSummary = xcResultFileData.getActionTestSummary(id: testPlanRunSummariesId)
         var failedTests = [ActionTestMetadata]()
-        let testPlanRunSummary = testPlanRunSummaries!.summaries[0]
+        let testPlanRunSummary = actionTestSummary!.summaries[0]
         for testableSummary in testPlanRunSummary.testableSummaries {
             if  testableSummary.tests.isEmpty {
                 continue
@@ -275,7 +275,7 @@ func saveLastScreenshots(xcResultFileData: XCResultFile, logsTestPath: String, l
         }
         for failedTestNode in failedTests {
             let testIdentifier = failedTestNode.identifier
-            let testLastScreenShotsPath = lastScreenshotsPath + "/" + (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "\(testActionRecord.runDestination.displayName)_") + "\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
+            let testLastScreenShotsPath = lastScreenshotsPath + "/" + (invocationRecord.actions[0].schemeTaskName == "Action" || invocationRecord.actions[0].schemeTaskName == "BuildAndAction" ? "" : "\(testActionRecord.runDestination.displayName)_") + "\(testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: ""))/"
 
             // extract the last screenshotsCount screenshots filenames of the test
             let lastPathsLimit = screenshotsCount == -1 ? Int.max : 4 * screenshotsCount
@@ -368,7 +368,7 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
 
     let invocationRecord = xcResultFileData.getInvocationRecord()!
     let testActionRecords = invocationRecord.actions.filter({ (actionRecord) -> Bool in
-        return actionRecord.schemeTaskName == "Action"
+        return actionRecord.schemeTaskName == "Action" || actionRecord.schemeTaskName == "BuildAndAction"
     })
     for action in testActionRecords {
         let targetDeviceRecord = action.runDestination.targetDeviceRecord
@@ -383,7 +383,7 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
         let testDeviceDescription = "\(testDeviceName) (\(testDeviceModelName) \(testDeviceOSVersion))"
 
         let testPlanRunSummariesId = action.actionResult.testsRef?.id ?? ""
-        let testPlanRunSummaries = xcResultFileData.getTestPlanRunSummaries(id: testPlanRunSummariesId)
+        let testPlanRunSummaries = xcResultFileData.getActionTestSummary(id: testPlanRunSummariesId)
 
         var totalTestsCount = 0
         var totalFailuresCount = 0
@@ -445,7 +445,7 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
                         let testFailureIssueSummaries = action.actionResult.issues.testFailureSummaries.filter({ (testFailureIssueSummary) -> Bool in
                             return testFailureIssueSummary.testCaseName == testIdentifier.replacingOccurrences(of: "/", with: ".")
                         })
-                        if testFailureIssueSummaries.count > 0 {
+                        if !testFailureIssueSummaries.isEmpty {
                             let firstFailureSummary = testFailureIssueSummaries[0]
                             failureMessage = validXMLString(firstFailureSummary.message)
                             var fileName = URL(string: firstFailureSummary.documentLocationInCreatingWorkspace?.url ?? "")?.path ?? ""
@@ -455,6 +455,14 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
                             let lineNumber = tokens?.count > 1 ? tokens![1] : "0"
                             fileName = fileName.replacingOccurrences(of: workspacePath, with: "")
                             failureStackTrace = fileName + ":" + lineNumber
+                        } else {
+                            let testErrorIssueSummaries = action.actionResult.issues.errorSummaries.filter({ (testErrorIssueSummary) -> Bool in
+                                return testErrorIssueSummary.message.contains(testCaseName.appending("()"))
+                            })
+                            if !testErrorIssueSummaries.isEmpty {
+                                let firstErrorIssueSummary = testErrorIssueSummaries[0]
+                                failureMessage = validXMLString(firstErrorIssueSummary.message)
+                            }
                         }
                         outputLogs = JSON.values(actionTestSummary.values(relativePath: titleJsonPath, lastPathsLimit: Int.max - 1, maxArrayCount: 400))
                         outputLogs = outputLogs.reversed()
@@ -467,7 +475,7 @@ func generateJUnitReport(xcResultFileData: XCResultFile, logsTestPath: String, j
                         if crashSummaries.count > 0 {
                             for i in 0..<crashSummaries.count {
                                 let crashSummary = crashSummaries[i]
-                                var savedCrashLogName = (invocationRecord.actions[0].schemeTaskName == "Action" ? "" : "\(action.runDestination.displayName)_") + testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
+                                var savedCrashLogName = (invocationRecord.actions[0].schemeTaskName == "Action" || invocationRecord.actions[0].schemeTaskName == "BuildAndAction" ? "" : "\(action.runDestination.displayName)_") + testIdentifier.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "()", with: "")
                                 savedCrashLogName = i != 0 ? savedCrashLogName.appending(String(i)): savedCrashLogName
                                 savedCrashLogName += ".crash.txt"
                                 let newTestCrashLogFile = testsCrashLogsPath + savedCrashLogName
